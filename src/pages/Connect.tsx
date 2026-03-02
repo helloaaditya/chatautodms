@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../api/supabase';
-import { connectInstagramWithToken } from '../api/instagram';
-import { useFacebookSDK } from '../hooks/useFacebookSDK';
-import { Instagram, Plus, ExternalLink, RefreshCcw, Trash2, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Instagram, Plus, RefreshCcw, Trash2, CheckCircle2, AlertCircle, Loader2, MessageSquare, ArrowRight } from 'lucide-react';
 import { InstagramAccount } from '../types';
 
 const INSTAGRAM_SCOPES = [
@@ -15,11 +13,11 @@ const INSTAGRAM_SCOPES = [
 ].join(',');
 
 export const ConnectInstagram: React.FC = () => {
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { isReady: fbReady, FB } = useFacebookSDK();
 
   const fetchAccounts = async () => {
     const { data } = await supabase.from('instagram_accounts').select('*');
@@ -47,42 +45,20 @@ export const ConnectInstagram: React.FC = () => {
     }
   }, [searchParams]);
 
-  const handleConnectWithFB = () => {
-    if (!window.FB) {
-      handleConnectRedirect();
-      return;
-    }
-    setConnecting(true);
-    setError(null);
-    window.FB.login(
-      (response) => {
-        if (response.status !== 'connected') {
-          setError('Facebook login was cancelled or failed.');
-          setConnecting(false);
-          return;
-        }
-        const { accessToken } = response.authResponse!;
-        connectInstagramWithToken(accessToken)
-          .then((result) => {
-            if (result.accounts?.length) fetchAccounts();
-          })
-          .catch((err) => {
-            setError(err instanceof Error ? err.message : 'Failed to connect Instagram');
-          })
-          .finally(() => setConnecting(false));
-      },
-      { scope: INSTAGRAM_SCOPES }
-    );
-  };
-
   const handleConnectRedirect = () => {
+    setError(null);
     const APP_ID = import.meta.env.VITE_META_APP_ID;
     const REDIRECT_URI = import.meta.env.VITE_META_REDIRECT_URI;
+    if (!APP_ID || !REDIRECT_URI) {
+      setError('App configuration missing. Contact support.');
+      return;
+    }
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) {
         setError('Please log in first');
         return;
       }
+      setConnecting(true);
       const redirectBase = encodeURIComponent(window.location.origin);
       const state = `${user.id}|${redirectBase}`;
       const url = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${INSTAGRAM_SCOPES}&response_type=code&state=${encodeURIComponent(state)}`;
@@ -90,9 +66,8 @@ export const ConnectInstagram: React.FC = () => {
     });
   };
 
-  // FB.login requires HTTPS; on HTTP (e.g. localhost) use redirect flow
-  const useFbPopup = typeof window !== 'undefined' && window.location.protocol === 'https:' && fbReady && FB;
-  const handleConnect = useFbPopup ? handleConnectWithFB : handleConnectRedirect;
+  // Always use redirect flow - more reliable than FB.login when Meta restricts app
+  const handleConnect = handleConnectRedirect;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -112,8 +87,13 @@ export const ConnectInstagram: React.FC = () => {
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 text-sm font-medium">
-          {error}
+        <div className="space-y-3">
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 text-sm font-medium">
+            {error}
+          </div>
+          <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-200 text-sm">
+            <strong>Meta App Issues?</strong> If you saw &quot;Feature not available&quot; / &quot;फ़ीचर उपलब्ध नहीं है&quot; on Facebook: (1) Add yourself as Admin or Tester in Meta app Roles, (2) Complete Business Verification, (3) Ensure Facebook Login is configured. Try again later.
+          </div>
         </div>
       )}
 
@@ -128,18 +108,44 @@ export const ConnectInstagram: React.FC = () => {
           <div className="w-20 h-20 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mb-6">
             <Instagram className="text-blue-600 dark:text-blue-400" size={40} />
           </div>
-          <h3 className="text-xl font-bold">No accounts connected</h3>
-          <p className="text-gray-500 mt-2 max-w-sm">Connect your first Instagram Business account to start building automations.</p>
-          <button
-            onClick={handleConnect}
-            disabled={connecting}
-            className="mt-6 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white rounded-lg font-medium transition-colors flex items-center gap-2 mx-auto"
-          >
-            {connecting ? <Loader2 size={18} className="animate-spin" /> : null}
-            Get Started
-          </button>
+          <h3 className="text-xl font-bold">Connect your Instagram account</h3>
+          <p className="text-gray-500 mt-2 max-w-md">
+            Click below to connect your Instagram Business account via Facebook. After connecting, you can set up auto DMs, comment replies, and lead capture.
+          </p>
+          <div className="mt-8 space-y-4">
+            <button
+              onClick={handleConnect}
+              disabled={connecting}
+              className="px-8 py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white rounded-xl font-semibold transition-colors flex items-center gap-2 mx-auto"
+            >
+              {connecting ? <Loader2 size={20} className="animate-spin" /> : <Instagram size={20} />}
+              {connecting ? 'Connecting...' : 'Connect Instagram Account'}
+            </button>
+            <p className="text-xs text-gray-400">You&apos;ll be redirected to Facebook to authorize</p>
+          </div>
         </div>
       ) : (
+        <>
+        {/* Next step: Set up Auto DMs */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-100 dark:border-blue-800 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-blue-600 rounded-xl text-white">
+              <MessageSquare size={28} />
+            </div>
+            <div>
+              <h4 className="font-bold text-lg">Set up Auto DMs & Automations</h4>
+              <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Create keyword triggers, auto-reply to DMs and comments, capture leads.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/automations')}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-colors shrink-0"
+          >
+            Create Automation
+            <ArrowRight size={18} />
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {accounts.map((account) => (
             <div key={account.id} className="group relative bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-xl hover:border-blue-500/50 transition-all duration-300">
@@ -185,6 +191,7 @@ export const ConnectInstagram: React.FC = () => {
             </div>
           ))}
         </div>
+        </>
       )}
 
       <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-2xl p-6 flex gap-4">

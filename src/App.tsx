@@ -6,6 +6,7 @@ import { LandingPage } from './pages/Landing';
 import { AuthPage } from './pages/Auth';
 import { PrivacyPolicy } from './pages/Privacy';
 import { TermsOfService } from './pages/Terms';
+import { AuthMetaCallback } from './pages/AuthMetaCallback';
 import { ConnectInstagram } from './pages/Connect';
 import { Automations } from './pages/Automations';
 import { Analytics } from './pages/Analytics';
@@ -56,6 +57,7 @@ const App: React.FC = () => {
       <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />} />
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsOfService />} />
+      <Route path="/auth/meta/callback" element={<AuthMetaCallback />} />
 
       {/* Protected Dashboard Routes */}
       <Route path="/dashboard" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />

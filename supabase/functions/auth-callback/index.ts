@@ -9,6 +9,12 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // DEBUG: Log full URL (remove in production)
+  const fullUrl = req.url;
+  console.log("[auth-callback] Full URL:", fullUrl);
+  console.log("[auth-callback] Has code:", fullUrl.includes("code="));
+  console.log("[auth-callback] Has state:", fullUrl.includes("state="));
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
