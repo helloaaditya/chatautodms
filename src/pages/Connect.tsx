@@ -48,8 +48,9 @@ export const ConnectInstagram: React.FC = () => {
   const handleConnectRedirect = () => {
     setError(null);
     const APP_ID = import.meta.env.VITE_META_APP_ID;
-    const REDIRECT_URI = import.meta.env.VITE_META_REDIRECT_URI;
-    if (!APP_ID || !REDIRECT_URI) {
+    // Use frontend callback so we can add auth header when calling Edge Function
+    const REDIRECT_URI = `${window.location.origin}/auth/meta/callback`;
+    if (!APP_ID) {
       setError('App configuration missing. Contact support.');
       return;
     }

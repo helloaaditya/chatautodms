@@ -37,7 +37,8 @@ serve(async (req) => {
   try {
     const APP_ID = Deno.env.get("META_APP_ID")!;
     const APP_SECRET = Deno.env.get("META_APP_SECRET")!;
-    const REDIRECT_URI = Deno.env.get("META_REDIRECT_URI")!;
+    // Must match redirect_uri used in OAuth request (frontend callback)
+    const REDIRECT_URI = redirectBase ? `${redirectBase}/auth/meta/callback` : Deno.env.get("META_REDIRECT_URI")!;
 
     // 1. Exchange code for short-lived access token
     const tokenRes = await fetch(
@@ -84,7 +85,7 @@ serve(async (req) => {
           is_active: true
         }, { onConflict: 'instagram_business_id' }).select();
 
-        if (data) connectedAccounts.push(data[0]);
+        if (data) { /* account stored */ }
       }
     }
 

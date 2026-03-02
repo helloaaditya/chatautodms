@@ -1,59 +1,79 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
 /**
- * DEBUG: Temporary page to capture Facebook OAuth redirect URL.
- * 
- * To use:
- * 1. In Meta App → Facebook Login → Valid OAuth Redirect URIs, add:
- *    http://localhost:3001/auth/meta/callback
- *    (or your deployed URL: https://your-app.vercel.app/auth/meta/callback)
- * 2. Try Connect Instagram again
- * 3. Check browser console for: [auth-meta-callback] Full URL: ...
- * 4. Remove this page and revert redirect URI when done debugging
+ * OAuth callback: receives redirect from Facebook, forwards to Edge Function with auth header,
+ * then redirects user. Supabase Edge Functions require Authorization header.
  */
 export const AuthMetaCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const [logged, setLogged] = useState(false);
+  const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const fullUrl = window.location.href;
-    console.log('[auth-meta-callback] Full URL:', fullUrl);
-    console.log('[auth-meta-callback] code=', searchParams.get('code') ? 'present' : 'missing');
-    console.log('[auth-meta-callback] state=', searchParams.get('state') ? 'present' : 'missing');
-    setLogged(true);
-  }, [searchParams]);
-
-  const handleContinue = () => {
     const code = searchParams.get('code');
     const state = searchParams.get('state');
-    const callbackUrl = import.meta.env.VITE_META_REDIRECT_URI;
-    if (code && state && callbackUrl) {
-      window.location.href = `${callbackUrl}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+
+    if (!code || !state) {
+      setStatus('error');
+      setErrorMsg('Missing code or state from Facebook');
+      return;
     }
-  };
+
+    const processCallback = async () => {
+      try {
+        const url = `${SUPABASE_URL}/functions/v1/auth-callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${ANON_KEY}`,
+            'apikey': ANON_KEY,
+          },
+          redirect: 'manual',
+        });
+
+        if (res.status === 302) {
+          const location = res.headers.get('Location');
+          if (location) {
+            window.location.href = location;
+            return;
+          }
+        }
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || `Request failed: ${res.status}`);
+        }
+      } catch (err) {
+        setStatus('error');
+        setErrorMsg(err instanceof Error ? err.message : 'Connection failed');
+      }
+    };
+
+    processCallback();
+  }, [searchParams]);
+
+  if (status === 'error') {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-8">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+          <h1 className="text-xl font-bold text-red-600 mb-4">Connection Failed</h1>
+          <p className="text-gray-600 mb-6">{errorMsg}</p>
+          <a href="/connect" className="text-blue-600 font-semibold hover:underline">← Back to Connect</a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-8">
-      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-2xl w-full">
-        <h1 className="text-xl font-bold text-gray-900 mb-4">OAuth Debug - Meta Callback</h1>
-        {logged && (
-          <p className="text-green-600 text-sm mb-4">✓ URL logged to console (F12 → Console)</p>
-        )}
-        <div className="bg-gray-50 rounded-xl p-4 mb-6 overflow-auto max-h-40">
-          <code className="text-xs text-gray-700 break-all">{window.location.href}</code>
-        </div>
-        <p className="text-sm text-gray-500 mb-4">
-          code: {searchParams.get('code') ? '✓ present' : '✗ missing'} | 
-          state: {searchParams.get('state') ? '✓ present' : '✗ missing'}
-        </p>
-        <button
-          onClick={handleContinue}
-          disabled={!searchParams.get('code') || !searchParams.get('state')}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium disabled:opacity-50"
-        >
-          Continue to Process (send to auth-callback)
-        </button>
+      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <h1 className="text-xl font-bold text-gray-900">Connecting Instagram...</h1>
+        <p className="text-gray-500 mt-2">Please wait while we complete the connection.</p>
       </div>
     </div>
   );
