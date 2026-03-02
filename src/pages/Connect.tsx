@@ -20,12 +20,20 @@ export const ConnectInstagram: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchAccounts = async () => {
-    const { data, error } = await supabase.from('instagram_accounts').select('*');
-    if (error) {
-      console.error('[Connect] Fetch error:', error);
-      setError(error.message);
+    // Use API route (reads session cookie server-side) so we always get the right user's accounts
+    const res = await fetch('/api/instagram-accounts', { credentials: 'include' });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const msg = typeof data?.error === 'string' ? data.error : 'Failed to load accounts';
+      if (res.status === 401) {
+        setError('Please log in again.');
+      } else {
+        setError(msg);
+      }
+      setAccounts([]);
+    } else {
+      setAccounts(Array.isArray(data) ? data : []);
     }
-    if (data) setAccounts(data);
     setLoading(false);
   };
 
