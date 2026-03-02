@@ -20,20 +20,32 @@ export const ConnectInstagram: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchAccounts = async () => {
-    // Use API route (reads session cookie server-side) so we always get the right user's accounts
-    const res = await fetch('/api/instagram-accounts', { credentials: 'include' });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      const msg = typeof data?.error === 'string' ? data.error : 'Failed to load accounts';
-      if (res.status === 401) {
-        setError('Please log in again.');
-      } else {
+    setError(null);
+    let list: InstagramAccount[] = [];
+
+    // 1) Try API route (server reads cookie, uses service role)
+    try {
+      const res = await fetch('/api/instagram-accounts', { credentials: 'include' });
+      const data = await res.json().catch(() => null);
+      if (res.ok && Array.isArray(data)) list = data;
+      if (!res.ok && res.status !== 401) {
+        const msg = typeof data?.error === 'string' ? data.error : 'API error';
         setError(msg);
       }
-      setAccounts([]);
-    } else {
-      setAccounts(Array.isArray(data) ? data : []);
+    } catch {
+      // API failed (e.g. network); will try Supabase below
     }
+
+    // 2) If no accounts yet, try direct Supabase (uses current session / RLS)
+    if (list.length === 0) {
+      const { data: supabaseData, error: supabaseError } = await supabase
+        .from('instagram_accounts')
+        .select('*');
+      if (supabaseError && !list.length) setError(supabaseError.message);
+      if (supabaseData?.length) list = supabaseData;
+    }
+
+    setAccounts(list);
     setLoading(false);
   };
 
@@ -151,6 +163,9 @@ export const ConnectInstagram: React.FC = () => {
           <h3 className="text-xl font-bold">Connect your Instagram account</h3>
           <p className="text-gray-500 mt-2 max-w-md">
             Click below to connect your Instagram Business account via Facebook. After connecting, you can set up auto DMs, comment replies, and lead capture.
+          </p>
+          <p className="text-sm text-amber-600 dark:text-amber-400 mt-2 max-w-md">
+            If you just connected and see this: click <strong>Refresh list</strong>. Your Instagram must be a <strong>Professional/Business</strong> account linked to a <strong>Facebook Page</strong>.
           </p>
           <div className="mt-8 space-y-4">
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
