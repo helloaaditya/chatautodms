@@ -1,12 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
 /**
- * OAuth callback: receives redirect from Facebook, forwards to Edge Function with auth header,
- * then redirects user. Supabase Edge Functions require Authorization header.
+ * OAuth callback: receives redirect from Facebook, then redirects to our API route
+ * which proxies to Supabase (avoids CORS - API runs server-side).
  */
 export const AuthMetaCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -33,15 +30,8 @@ export const AuthMetaCallback: React.FC = () => {
 
     const processCallback = async () => {
       try {
-        const url = `${SUPABASE_URL}/functions/v1/auth-callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
-        const res = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${ANON_KEY}`,
-            'apikey': ANON_KEY,
-          },
-          redirect: 'manual',
-        });
+        const apiUrl = `/api/auth-callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+        const res = await fetch(apiUrl, { redirect: 'manual' });
 
         if (res.status === 302) {
           const location = res.headers.get('Location');
@@ -57,7 +47,10 @@ export const AuthMetaCallback: React.FC = () => {
         }
       } catch (err) {
         setStatus('error');
-        setErrorMsg(err instanceof Error ? err.message : 'Connection failed');
+        const msg = err instanceof Error ? err.message : 'Connection failed';
+        setErrorMsg(msg === 'Failed to fetch'
+          ? 'Could not reach server. Check Vercel env vars and ensure auth-callback is deployed.'
+          : msg);
       }
     };
 

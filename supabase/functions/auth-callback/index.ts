@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Expose-Headers": "Location",
 };
 
 serve(async (req) => {
@@ -26,7 +27,10 @@ serve(async (req) => {
 
   if (!code || !state) {
     const appUrl = Deno.env.get("META_APP_URL") || "http://localhost:3001";
-    return Response.redirect(`${appUrl}/connect?error=no_code`, 302);
+    return new Response(null, {
+      status: 302,
+      headers: { ...corsHeaders, Location: `${appUrl}/connect?error=no_code` },
+    });
   }
 
   const [userId, redirectBase] = state.includes("|")
@@ -89,9 +93,15 @@ serve(async (req) => {
       }
     }
 
-    return Response.redirect(`${appUrl}/connect?success=1`, 302);
+    return new Response(null, {
+      status: 302,
+      headers: { ...corsHeaders, Location: `${appUrl}/connect?success=1` },
+    });
   } catch (err) {
     const msg = encodeURIComponent(err?.message ?? "Connection failed");
-    return Response.redirect(`${appUrl}/connect?error=${msg}`, 302);
+    return new Response(null, {
+      status: 302,
+      headers: { ...corsHeaders, Location: `${appUrl}/connect?error=${msg}` },
+    });
   }
 });
