@@ -4,12 +4,12 @@ import { supabase } from '../api/supabase';
 import { Instagram, Plus, RefreshCcw, Trash2, CheckCircle2, AlertCircle, Loader2, MessageSquare, ArrowRight } from 'lucide-react';
 import { InstagramAccount } from '../types';
 
+// instagram_manage_messages requires App Review approval - add after connecting
 const INSTAGRAM_SCOPES = [
-  'instagram_basic',
-  'instagram_manage_messages',
+  'public_profile',
   'pages_show_list',
   'pages_read_engagement',
-  'public_profile',
+  'instagram_basic',
 ].join(',');
 
 export const ConnectInstagram: React.FC = () => {

@@ -16,6 +16,14 @@ export const AuthMetaCallback: React.FC = () => {
   useEffect(() => {
     const code = searchParams.get('code');
     const state = searchParams.get('state');
+    const errorCode = searchParams.get('error_code');
+    const errorMessage = searchParams.get('error_message');
+
+    if (errorCode || errorMessage) {
+      setStatus('error');
+      setErrorMsg(decodeURIComponent(errorMessage || errorCode || 'Facebook returned an error'));
+      return;
+    }
 
     if (!code || !state) {
       setStatus('error');
