@@ -78,8 +78,19 @@ serve(async (req) => {
       if (pageData.instagram_business_account) {
         const igAccountId = pageData.instagram_business_account.id;
 
-        // 5. Ensure profile exists (handles OAuth users; migration 20260302000000)
-        await supabase.rpc("ensure_profile_exists", { p_user_id: userId }).catch(() => {});
+        // 5. Ensure profile exists (RPC or admin fallback)
+        const rpcOk = await supabase.rpc("ensure_profile_exists", { p_user_id: userId }).then(() => true).catch(() => false);
+        if (!rpcOk) {
+          const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+          const email = authUser?.user?.email ?? `${userId}@placeholder.local`;
+          await supabase.from("profiles").upsert({
+            id: userId,
+            email,
+            full_name: authUser?.user?.user_metadata?.full_name ?? null,
+            avatar_url: authUser?.user?.user_metadata?.avatar_url ?? null,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "id", ignoreDuplicates: true });
+        }
 
         // 6. Store in Database
         const { data, error } = await supabase.from("instagram_accounts").upsert({

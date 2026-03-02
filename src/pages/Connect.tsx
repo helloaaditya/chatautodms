@@ -23,25 +23,34 @@ export const ConnectInstagram: React.FC = () => {
     setError(null);
     let list: InstagramAccount[] = [];
 
-    // 1) Try API route (server reads cookie, uses service role)
-    try {
-      const res = await fetch('/api/instagram-accounts', { credentials: 'include' });
-      const data = await res.json().catch(() => null);
-      if (res.ok && Array.isArray(data)) list = data;
-      if (!res.ok && res.status !== 401) {
-        const msg = typeof data?.error === 'string' ? data.error : 'API error';
-        setError(msg);
+    // Get session first so we can send token (session often in localStorage, not cookie)
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    // 1) API route with Bearer token (service role = no RLS issues)
+    if (token) {
+      try {
+        const res = await fetch('/api/instagram-accounts', {
+          credentials: 'include',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json().catch(() => null);
+        if (res.ok && Array.isArray(data)) list = data;
+        if (!res.ok && res.status !== 401) {
+          const msg = typeof data?.error === 'string' ? data.error : 'API error';
+          setError(msg);
+        }
+      } catch {
+        // fall through to direct Supabase
       }
-    } catch {
-      // API failed (e.g. network); will try Supabase below
     }
 
-    // 2) If no accounts yet, try direct Supabase (uses current session / RLS)
+    // 2) Fallback: direct Supabase (RLS with current session)
     if (list.length === 0) {
       const { data: supabaseData, error: supabaseError } = await supabase
         .from('instagram_accounts')
         .select('*');
-      if (supabaseError && !list.length) setError(supabaseError.message);
+      if (supabaseError) setError(supabaseError.message);
       if (supabaseData?.length) list = supabaseData;
     }
 
@@ -70,9 +79,10 @@ export const ConnectInstagram: React.FC = () => {
       setError(null);
       setLoading(true);
       fetchAccounts();
-      // Refetch after delay (handles DB commit / session sync timing)
-      const t = setTimeout(() => fetchAccounts(), 1500);
-      return () => clearTimeout(t);
+      // Refetch after delays (DB commit / replication can be delayed)
+      const t1 = setTimeout(() => fetchAccounts(), 800);
+      const t2 = setTimeout(() => fetchAccounts(), 2500);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
     }
     if (errorParam) {
       const decoded = decodeURIComponent(errorParam);

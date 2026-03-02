@@ -1,10 +1,11 @@
 /**
- * Server-side fetch of Instagram accounts using session cookie.
- * Uses service role so we always get the correct user's data (avoids RLS/session sync issues).
+ * Server-side fetch of Instagram accounts.
+ * Accepts session via Authorization: Bearer <token> (primary) or cookie (fallback).
+ * Uses service role so we always get the correct user's data.
  */
 type VercelReq = {
   method?: string;
-  headers?: { cookie?: string };
+  headers?: { cookie?: string; authorization?: string };
 };
 type VercelRes = {
   setHeader: (name: string, value: string) => void;
@@ -15,18 +16,28 @@ type VercelRes = {
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-function getUserIdFromCookie(cookieHeader: string | undefined): string | null {
-  if (!cookieHeader) return null;
-  const match = cookieHeader.match(/sb-[^=]+-auth-token=([^;]+)/);
+function getUserIdFromJwt(token: string): string | null {
+  try {
+    const b64 = token.split('.')[1]?.replace(/-/g, '+').replace(/_/g, '/');
+    if (!b64) return null;
+    const payload = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
+    return payload?.sub ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getTokenFromRequest(req: VercelReq): string | null {
+  const auth = req.headers?.authorization;
+  if (auth?.startsWith('Bearer ')) return auth.slice(7);
+  const cookie = req.headers?.cookie;
+  if (!cookie) return null;
+  const match = cookie.match(/sb-[^=]+-auth-token=([^;]+)/);
   if (!match) return null;
   try {
     const decoded = decodeURIComponent(match[1]);
     const session = JSON.parse(decoded) as { access_token?: string };
-    const token = session?.access_token;
-    if (!token) return null;
-    const b64 = token.split('.')[1]?.replace(/-/g, '+').replace(/_/g, '/');
-    const payload = b64 ? JSON.parse(Buffer.from(b64, 'base64').toString('utf8')) : {};
-    return payload?.sub ?? null;
+    return session?.access_token ?? null;
   } catch {
     return null;
   }
@@ -39,7 +50,8 @@ export default async function handler(req: VercelReq, res: VercelRes) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const userId = getUserIdFromCookie(req.headers?.cookie);
+  const token = getTokenFromRequest(req);
+  const userId = token ? getUserIdFromJwt(token) : null;
   if (!userId) {
     return res.status(401).json({ error: 'Not signed in' });
   }
