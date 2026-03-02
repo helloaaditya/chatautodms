@@ -1,0 +1,75 @@
+import React, { useEffect, useState } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { supabase } from './api/supabase';
+import { Layout } from './components/layout/Layout';
+import { LandingPage } from './pages/Landing';
+import { AuthPage } from './pages/Auth';
+import { PrivacyPolicy } from './pages/Privacy';
+import { TermsOfService } from './pages/Terms';
+import { ConnectInstagram } from './pages/Connect';
+import { Automations } from './pages/Automations';
+import { Analytics } from './pages/Analytics';
+
+const App: React.FC = () => {
+  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const location = useLocation();
+
+  useEffect(() => {
+    // Check initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      // Give the redirect a small buffer if we see a code or token in the URL
+      const hasAuthParams = window.location.hash || window.location.search.includes('code=');
+      if (!hasAuthParams) {
+        setLoading(false);
+      }
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setLoading(false); // Done loading once we have an auth event
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+
+  const isPublicRoute = ['/', '/login'].includes(location.pathname);
+
+  // Protected Route Wrapper
+  const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+    if (!session) return <Navigate to="/login" replace />;
+    return <Layout>{children}</Layout>;
+  };
+
+  return (
+    <Routes>
+      {/* Public Routes */}
+      <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
+      <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<TermsOfService />} />
+
+      {/* Protected Dashboard Routes */}
+      <Route path="/dashboard" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+      <Route path="/connect" element={<ProtectedRoute><ConnectInstagram /></ProtectedRoute>} />
+      <Route path="/automations" element={<ProtectedRoute><Automations /></ProtectedRoute>} />
+      <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+      <Route path="/leads" element={<ProtectedRoute><div className="p-8">Leads Page (Coming Soon)</div></ProtectedRoute>} />
+      <Route path="/billing" element={<ProtectedRoute><div className="p-8">Billing Page (Coming Soon)</div></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><div className="p-8">Settings Page (Coming Soon)</div></ProtectedRoute>} />
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+};
+
+export default App;
