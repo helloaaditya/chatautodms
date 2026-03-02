@@ -28,9 +28,7 @@ export default async function handler(req: VercelReq, res: VercelRes) {
   }
 
   if (!SUPABASE_URL || !ANON_KEY) {
-    return res.status(500).json({
-      error: 'Server misconfiguration. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel.',
-    });
+    return res.redirect(302, '/connect?error=' + encodeURIComponent('Server misconfiguration. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel.'));
   }
 
   const url = `${SUPABASE_URL}/functions/v1/auth-callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
@@ -54,14 +52,13 @@ export default async function handler(req: VercelReq, res: VercelRes) {
 
     if (!supabaseRes.ok) {
       const err = await supabaseRes.json().catch(() => ({}));
-      return res.status(supabaseRes.status).json({
-        error: (err as { message?: string }).message || `Request failed: ${supabaseRes.status}`,
-      });
+      const msg = (err as { message?: string }).message || `Request failed: ${supabaseRes.status}`;
+      return res.redirect(302, '/connect?error=' + encodeURIComponent(msg));
     }
 
     return res.redirect(302, '/connect');
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Connection failed';
-    return res.status(500).json({ error: msg });
+    return res.redirect(302, '/connect?error=' + encodeURIComponent(msg));
   }
 }
