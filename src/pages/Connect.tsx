@@ -40,7 +40,13 @@ export const ConnectInstagram: React.FC = () => {
       fetchAccounts();
     }
     if (errorParam) {
-      setError(decodeURIComponent(errorParam));
+      const decoded = decodeURIComponent(errorParam);
+      // OAuth codes are single-use; show friendlier message for retry
+      const friendly =
+        decoded.toLowerCase().includes('authorization code has been used')
+          ? 'The connection link expired or was already used. Please try connecting again to get a fresh authorization.'
+          : decoded;
+      setError(friendly);
       setSearchParams({}, { replace: true });
     }
   }, [searchParams]);

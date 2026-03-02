@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 /**
@@ -9,6 +9,7 @@ export const AuthMetaCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const processedRef = useRef(false);
 
   useEffect(() => {
     const code = searchParams.get('code');
@@ -28,6 +29,10 @@ export const AuthMetaCallback: React.FC = () => {
       return;
     }
 
+    // Prevent double submission (React Strict Mode, back-button, etc.)
+    if (processedRef.current) return;
+    processedRef.current = true;
+
     const processCallback = async () => {
       try {
         const apiUrl = `/api/auth-callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
@@ -43,9 +48,10 @@ export const AuthMetaCallback: React.FC = () => {
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          throw new Error(err.message || `Request failed: ${res.status}`);
+          throw new Error((err as { error?: string }).error || (err as { message?: string }).message || `Request failed: ${res.status}`);
         }
       } catch (err) {
+        processedRef.current = false; // Allow retry on network error
         setStatus('error');
         const msg = err instanceof Error ? err.message : 'Connection failed';
         setErrorMsg(msg === 'Failed to fetch'
