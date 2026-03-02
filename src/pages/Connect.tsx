@@ -50,6 +50,9 @@ export const ConnectInstagram: React.FC = () => {
       setError(null);
       setLoading(true);
       fetchAccounts();
+      // Refetch after delay (handles DB commit / session sync timing)
+      const t = setTimeout(() => fetchAccounts(), 1500);
+      return () => clearTimeout(t);
     }
     if (errorParam) {
       const decoded = decodeURIComponent(errorParam);
@@ -95,14 +98,24 @@ export const ConnectInstagram: React.FC = () => {
           <h2 className="text-3xl font-bold tracking-tight">Instagram Accounts</h2>
           <p className="text-gray-500 dark:text-gray-400 mt-1">Connect and manage your Instagram Business accounts.</p>
         </div>
-        <button
-          onClick={handleConnect}
-          disabled={connecting}
-          className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
-        >
-          {connecting ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
-          <span>{connecting ? 'Connecting...' : 'Connect New Account'}</span>
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setLoading(true); fetchAccounts(); }}
+            disabled={loading}
+            className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50 text-gray-700 dark:text-gray-200 rounded-xl font-medium transition-colors"
+          >
+            <RefreshCcw size={18} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+          <button
+            onClick={handleConnect}
+            disabled={connecting}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+          >
+            {connecting ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
+            <span>{connecting ? 'Connecting...' : 'Connect New Account'}</span>
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -132,15 +145,25 @@ export const ConnectInstagram: React.FC = () => {
             Click below to connect your Instagram Business account via Facebook. After connecting, you can set up auto DMs, comment replies, and lead capture.
           </p>
           <div className="mt-8 space-y-4">
-            <button
-              onClick={handleConnect}
-              disabled={connecting}
-              className="px-8 py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white rounded-xl font-semibold transition-colors flex items-center gap-2 mx-auto"
-            >
-              {connecting ? <Loader2 size={20} className="animate-spin" /> : <Instagram size={20} />}
-              {connecting ? 'Connecting...' : 'Connect Instagram Account'}
-            </button>
-            <p className="text-xs text-gray-400">You&apos;ll be redirected to Facebook to authorize</p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={() => { setLoading(true); fetchAccounts(); }}
+                disabled={loading}
+                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-medium transition-colors flex items-center gap-2 justify-center"
+              >
+                <RefreshCcw size={18} className={loading ? 'animate-spin' : ''} />
+                Refresh list
+              </button>
+              <button
+                onClick={handleConnect}
+                disabled={connecting}
+                className="px-8 py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white rounded-xl font-semibold transition-colors flex items-center gap-2 justify-center"
+              >
+                {connecting ? <Loader2 size={20} className="animate-spin" /> : <Instagram size={20} />}
+                {connecting ? 'Connecting...' : 'Connect Instagram Account'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">You&apos;ll be redirected to Facebook to authorize</p>
           </div>
         </div>
       ) : (
