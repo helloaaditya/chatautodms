@@ -69,6 +69,7 @@ serve(async (req) => {
       throw new Error("No Facebook Pages found. Connect a Page to your Instagram Business account first.");
     }
 
+    let storedCount = 0;
     for (const page of pages) {
       // 4. Fetch Instagram Business Account linked to the Page
       const igRes = await fetch(`https://graph.facebook.com/v19.0/${page.id}?fields=instagram_business_account,name,picture&access_token=${longLivedToken}`);
@@ -77,7 +78,10 @@ serve(async (req) => {
       if (pageData.instagram_business_account) {
         const igAccountId = pageData.instagram_business_account.id;
 
-        // 5. Store in Database
+        // 5. Ensure profile exists (handles OAuth users; migration 20260302000000)
+        await supabase.rpc("ensure_profile_exists", { p_user_id: userId }).catch(() => {});
+
+        // 6. Store in Database
         const { data, error } = await supabase.from("instagram_accounts").upsert({
           user_id: userId,
           instagram_business_id: igAccountId,
@@ -89,8 +93,13 @@ serve(async (req) => {
           is_active: true
         }, { onConflict: 'instagram_business_id' }).select();
 
-        if (data) { /* account stored */ }
+        if (error) throw new Error(error.message || "Failed to save account");
+        if (data?.length) storedCount++;
       }
+    }
+
+    if (storedCount === 0) {
+      throw new Error("No Instagram Business account found. Link your Instagram to a Facebook Page first (Settings → Professional account → Connect to a Page).");
     }
 
     return new Response(null, {

@@ -20,7 +20,11 @@ export const ConnectInstagram: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchAccounts = async () => {
-    const { data } = await supabase.from('instagram_accounts').select('*');
+    const { data, error } = await supabase.from('instagram_accounts').select('*');
+    if (error) {
+      console.error('[Connect] Fetch error:', error);
+      setError(error.message);
+    }
     if (data) setAccounts(data);
     setLoading(false);
   };
@@ -31,11 +35,19 @@ export const ConnectInstagram: React.FC = () => {
     fetchAccounts();
   }, []);
 
+  // Refetch when page becomes visible (e.g. returning from OAuth or switching tabs)
+  useEffect(() => {
+    const onFocus = () => fetchAccounts();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
+
   useEffect(() => {
     const success = searchParams.get('success');
     const errorParam = searchParams.get('error');
     if (success === '1') {
       setSearchParams({}, { replace: true });
+      setError(null);
       setLoading(true);
       fetchAccounts();
     }
