@@ -1,9 +1,5 @@
-// @ts-expect-error Deno resolves URL imports at runtime
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-// @ts-expect-error Deno resolves URL imports at runtime
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-
-declare const Deno: { env: { get(key: string): string | undefined } };
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -67,83 +63,53 @@ serve(async (req) => {
       const shortLivedToken = shortLived?.access_token ?? tokenData.access_token;
       const igUserId = shortLived?.user_id ?? tokenData.user_id;
       if (!shortLivedToken) {
-        console.error("[auth-callback] Token exchange failed:", JSON.stringify(tokenData).slice(0, 200));
         throw new Error(tokenData.error_message ?? tokenData.error?.message ?? "Failed to get token from Instagram");
       }
-      console.log("[auth-callback] Short-lived token ok, exchanging for long-lived");
 
-      const longTokenUrl = new URL("https://graph.instagram.com/access_token");
-      longTokenUrl.searchParams.set("grant_type", "ig_exchange_token");
-      longTokenUrl.searchParams.set("client_secret", IG_APP_SECRET);
-      longTokenUrl.searchParams.set("access_token", shortLivedToken);
-      const longRes = await fetch(longTokenUrl.toString(), {
-        method: "GET",
-        headers: { "User-Agent": "ChatAutoDMs-Instagram-OAuth/1.0" },
-      });
+      const longRes = await fetch(
+        `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${IG_APP_SECRET}&access_token=${shortLivedToken}`
+      );
       const longData = await longRes.json();
-      let longLivedToken = longData.access_token;
-      let expires_in = longData.expires_in ?? 5184000;
+      const longLivedToken = longData.access_token;
+      const expires_in = longData.expires_in ?? 5184000;
       if (!longLivedToken) {
-        const errMsg = longData?.error?.message ?? "";
-        if (errMsg.toLowerCase().includes("unsupported request")) {
-          console.warn("[auth-callback] Long-lived exchange rejected by API, using short-lived token (1h). Account will need re-connect later.");
-          longLivedToken = shortLivedToken;
-          expires_in = 3600;
-        } else {
-          console.error("[auth-callback] Long-lived exchange failed:", errMsg);
-          throw new Error(errMsg || "Failed to get long-lived token");
-        }
-      } else {
-        console.log("[auth-callback] Long-lived token ok");
+        throw new Error(longData.error?.message ?? "Failed to get long-lived token");
       }
 
       const meRes = await fetch(
-        `https://graph.instagram.com/v21.0/me?fields=id,user_id,username,name,profile_picture_url&access_token=${longLivedToken}`
+        `https://graph.instagram.com/v21.0/me?fields=user_id,username,name,profile_picture_url&access_token=${longLivedToken}`
       );
       const meRaw = await meRes.json();
-      let igId: string | null = null;
-      let accountName = "Instagram";
-      let profilePicture: string | null = null;
+      const meData = Array.isArray(meRaw?.data) ? meRaw.data[0] : meRaw;
+      const igId = meData?.user_id ?? igUserId ?? meRaw?.user_id ?? meRaw?.id;
+      if (!igId) throw new Error("Could not get Instagram account id");
 
-      if (meRaw?.error) {
-        console.warn("[auth-callback] /me failed:", meRaw.error.message, "- using user_id from token response");
-        if (!igUserId) throw new Error(meRaw.error.message ?? "Instagram API error");
-        igId = String(igUserId);
-      } else {
-        const meData = Array.isArray(meRaw?.data) ? meRaw.data[0] : meRaw;
-        igId = meData?.id ?? meData?.user_id ?? igUserId ?? meRaw?.id ?? meRaw?.user_id ?? null;
-        if (igId) {
-          accountName = meData?.username ?? meData?.name ?? meRaw?.username ?? meRaw?.name ?? "Instagram";
-          profilePicture = meData?.profile_picture_url ?? meRaw?.profile_picture_url ?? null;
-        }
+      const rpcOk = await supabase.rpc("ensure_profile_exists", { p_user_id: userId }).then(() => true).catch(() => false);
+      if (!rpcOk) {
+        const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+        const email = authUser?.user?.email ?? `${userId}@placeholder.local`;
+        const { error: profileErr } = await supabase.from("profiles").upsert({
+          id: userId,
+          email,
+          full_name: authUser?.user?.user_metadata?.full_name ?? null,
+          avatar_url: authUser?.user?.user_metadata?.avatar_url ?? null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "id", ignoreDuplicates: true });
+        if (profileErr) throw new Error("Could not create profile. Run ensure_profile_exists migration.");
       }
 
-      if (!igId) {
-        console.error("[auth-callback] No Instagram id from /me or token:", JSON.stringify(meRaw).slice(0, 200));
-        throw new Error("Could not get Instagram account id");
-      }
-      console.log("[auth-callback] Got igId:", String(igId).slice(0, 15) + "...");
+      const { error } = await supabase.from("instagram_accounts").upsert({
+        user_id: userId,
+        instagram_business_id: igId,
+        page_id: igId,
+        account_name: meData?.username ?? meData?.name ?? meRaw?.username ?? "Instagram",
+        profile_picture: meData?.profile_picture_url ?? meRaw?.profile_picture_url ?? null,
+        access_token: longLivedToken,
+        token_expiry: new Date(Date.now() + expires_in * 1000).toISOString(),
+        is_active: true,
+      }, { onConflict: "instagram_business_id" }).select();
 
-      accountName = accountName || "Instagram";
-      const tokenExpiry = new Date(Date.now() + expires_in * 1000).toISOString();
-
-      // Save in one transaction via RPC (ensures profile exists + upserts instagram_accounts)
-      const { data: savedId, error: rpcError } = await supabase.rpc("save_instagram_account_after_oauth", {
-        p_user_id: userId,
-        p_instagram_business_id: String(igId),
-        p_page_id: String(igId),
-        p_account_name: accountName,
-        p_profile_picture: profilePicture,
-        p_access_token: longLivedToken,
-        p_token_expiry: tokenExpiry,
-        p_is_active: true,
-      });
-
-      if (rpcError) {
-        console.error("[auth-callback] save_instagram_account_after_oauth failed:", rpcError.message, "user_id:", userId?.slice(0, 8));
-        throw new Error(rpcError.message || "Failed to save account");
-      }
-      console.log("[auth-callback] Account saved:", accountName, "user_id:", userId?.slice(0, 8), "id:", savedId);
+      if (error) throw new Error(error.message);
       return new Response(null, {
         status: 302,
         headers: { ...corsHeaders, Location: `${appUrl}/connect?success=1` },
