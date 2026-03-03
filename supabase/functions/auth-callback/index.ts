@@ -109,49 +109,26 @@ serve(async (req) => {
       }
       console.log("[auth-callback] Got igId:", String(igId).slice(0, 15) + "...");
 
-      // Ensure profile exists (required: instagram_accounts.user_id -> profiles.id)
-      await supabase.rpc("ensure_profile_exists", { p_user_id: userId }).catch(() => {});
-      const { data: authUser } = await supabase.auth.admin.getUserById(userId);
-      const profileEmail = authUser?.user?.email ?? `${userId}@temp.local`;
-      const { error: profileErr } = await supabase.from("profiles").upsert(
-        {
-          id: userId,
-          email: profileEmail,
-          full_name: authUser?.user?.user_metadata?.full_name ?? null,
-          avatar_url: authUser?.user?.user_metadata?.avatar_url ?? null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id", ignoreDuplicates: true }
-      );
-      if (profileErr) {
-        console.error("[auth-callback] Profile upsert failed:", profileErr.message);
-        throw new Error("Could not create profile. Please try again or contact support.");
-      }
-      console.log("[auth-callback] Profile ok, inserting instagram_accounts");
-
       const accountName = meData?.username ?? meData?.name ?? meRaw?.username ?? meRaw?.name ?? "Instagram";
-      const { data: insertedRows, error } = await supabase
-        .from("instagram_accounts")
-        .upsert(
-          {
-            user_id: userId,
-            instagram_business_id: String(igId),
-            page_id: String(igId),
-            account_name: accountName,
-            profile_picture: meData?.profile_picture_url ?? meRaw?.profile_picture_url ?? null,
-            access_token: longLivedToken,
-            token_expiry: new Date(Date.now() + expires_in * 1000).toISOString(),
-            is_active: true,
-          },
-          { onConflict: "instagram_business_id" }
-        )
-        .select();
+      const tokenExpiry = new Date(Date.now() + expires_in * 1000).toISOString();
 
-      if (error) {
-        console.error("[auth-callback] instagram_accounts upsert failed:", error.message, "user_id:", userId?.slice(0, 8));
-        throw new Error(error.message);
+      // Save in one transaction via RPC (ensures profile exists + upserts instagram_accounts)
+      const { data: savedId, error: rpcError } = await supabase.rpc("save_instagram_account_after_oauth", {
+        p_user_id: userId,
+        p_instagram_business_id: String(igId),
+        p_page_id: String(igId),
+        p_account_name: accountName,
+        p_profile_picture: meData?.profile_picture_url ?? meRaw?.profile_picture_url ?? null,
+        p_access_token: longLivedToken,
+        p_token_expiry: tokenExpiry,
+        p_is_active: true,
+      });
+
+      if (rpcError) {
+        console.error("[auth-callback] save_instagram_account_after_oauth failed:", rpcError.message, "user_id:", userId?.slice(0, 8));
+        throw new Error(rpcError.message || "Failed to save account");
       }
-      console.log("[auth-callback] Account saved:", accountName, "user_id:", userId?.slice(0, 8), "rows:", insertedRows?.length);
+      console.log("[auth-callback] Account saved:", accountName, "user_id:", userId?.slice(0, 8), "id:", savedId);
       return new Response(null, {
         status: 302,
         headers: { ...corsHeaders, Location: `${appUrl}/connect?success=1` },
