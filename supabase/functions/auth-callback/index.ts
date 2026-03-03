@@ -68,23 +68,30 @@ serve(async (req) => {
       }
       console.log("[auth-callback] Short-lived token ok, exchanging for long-lived");
 
-      const longRes = await fetch("https://graph.instagram.com/access_token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "ig_exchange_token",
-          client_secret: IG_APP_SECRET,
-          access_token: shortLivedToken,
-        }),
+      const longTokenUrl = new URL("https://graph.instagram.com/access_token");
+      longTokenUrl.searchParams.set("grant_type", "ig_exchange_token");
+      longTokenUrl.searchParams.set("client_secret", IG_APP_SECRET);
+      longTokenUrl.searchParams.set("access_token", shortLivedToken);
+      const longRes = await fetch(longTokenUrl.toString(), {
+        method: "GET",
+        headers: { "User-Agent": "ChatAutoDMs-Instagram-OAuth/1.0" },
       });
       const longData = await longRes.json();
-      const longLivedToken = longData.access_token;
-      const expires_in = longData.expires_in ?? 5184000;
+      let longLivedToken = longData.access_token;
+      let expires_in = longData.expires_in ?? 5184000;
       if (!longLivedToken) {
-        console.error("[auth-callback] Long-lived exchange failed:", longData?.error?.message);
-        throw new Error(longData.error?.message ?? "Failed to get long-lived token");
+        const errMsg = longData?.error?.message ?? "";
+        if (errMsg.toLowerCase().includes("unsupported request")) {
+          console.warn("[auth-callback] Long-lived exchange rejected by API, using short-lived token (1h). Account will need re-connect later.");
+          longLivedToken = shortLivedToken;
+          expires_in = 3600;
+        } else {
+          console.error("[auth-callback] Long-lived exchange failed:", errMsg);
+          throw new Error(errMsg || "Failed to get long-lived token");
+        }
+      } else {
+        console.log("[auth-callback] Long-lived token ok");
       }
-      console.log("[auth-callback] Long-lived token ok, fetching /me");
 
       const meRes = await fetch(
         `https://graph.instagram.com/v21.0/me?fields=id,user_id,username,name,profile_picture_url&access_token=${longLivedToken}`
