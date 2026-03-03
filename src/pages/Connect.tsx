@@ -90,10 +90,12 @@ export const ConnectInstagram: React.FC = () => {
     if (errorParam) {
       const decoded = decodeURIComponent(errorParam);
       // OAuth codes are single-use; show friendlier message for retry
-      const friendly =
-        decoded.toLowerCase().includes('authorization code has been used')
-          ? 'The connection link expired or was already used. Please try connecting again to get a fresh authorization.'
-          : decoded;
+      let friendly = decoded;
+      if (decoded.toLowerCase().includes('authorization code has been used')) {
+        friendly = 'The connection link expired or was already used. Please try connecting again.';
+      } else if (decoded.toLowerCase().includes('no instagram business account')) {
+        friendly = 'Link your Instagram to a Facebook Page first: Instagram → Settings → Account → Switch to Professional account → Connect to a Facebook Page. Then try again.';
+      }
       setError(friendly);
       setSearchParams({}, { replace: true });
     }
@@ -129,7 +131,7 @@ export const ConnectInstagram: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Instagram Accounts</h2>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Connect and manage your Instagram Business accounts.</p>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">Connect Instagram and manage automations.</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -173,12 +175,12 @@ export const ConnectInstagram: React.FC = () => {
           <div className="w-20 h-20 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mb-6">
             <Instagram className="text-blue-600 dark:text-blue-400" size={40} />
           </div>
-          <h3 className="text-xl font-bold">Connect your Instagram account</h3>
+          <h3 className="text-xl font-bold">Connect your Instagram</h3>
           <p className="text-gray-500 mt-2 max-w-md">
-            Click below to connect your Instagram Business account via Facebook. After connecting, you can set up auto DMs, comment replies, and lead capture.
+            Connect your Instagram to set up auto DMs, comment replies, and lead capture. One-time sign-in is used only to link your account.
           </p>
-          <p className="text-sm text-amber-600 dark:text-amber-400 mt-2 max-w-md">
-            If you just connected and see this: click <strong>Refresh list</strong>. Your Instagram must be a <strong>Professional/Business</strong> account linked to a <strong>Facebook Page</strong>.
+          <p className="text-xs text-gray-400 mt-2 max-w-md">
+            For business features, Meta requires your Instagram to be a Professional account linked to a Page. You can create a Page in one step during connect.
           </p>
           <div className="mt-8 space-y-4">
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -196,10 +198,10 @@ export const ConnectInstagram: React.FC = () => {
                 className="px-8 py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white rounded-xl font-semibold transition-colors flex items-center gap-2 justify-center"
               >
                 {connecting ? <Loader2 size={20} className="animate-spin" /> : <Instagram size={20} />}
-                {connecting ? 'Connecting...' : 'Connect Instagram Account'}
+                {connecting ? 'Connecting...' : 'Connect Instagram'}
               </button>
             </div>
-            <p className="text-xs text-gray-400 mt-2">You&apos;ll be redirected to Facebook to authorize</p>
+            <p className="text-xs text-gray-400 mt-2">Uses Meta sign-in once to connect your Instagram</p>
           </div>
         </div>
       ) : (
@@ -279,9 +281,9 @@ export const ConnectInstagram: React.FC = () => {
         <div>
           <h4 className="font-bold text-blue-900 dark:text-blue-100">Before you connect</h4>
           <ul className="mt-2 text-sm text-blue-700 dark:text-blue-300 space-y-1.5 list-disc list-inside">
-            <li>Your Instagram account must be a <span className="font-semibold underline">Professional/Business</span> account.</li>
-            <li>It must be connected to a <span className="font-semibold underline">Facebook Page</span> you manage.</li>
-            <li>Make sure &quot;Allow Access to Messages&quot; is enabled in Instagram settings.</li>
+            <li>Use a <span className="font-semibold">Professional or Creator</span> Instagram account.</li>
+            <li>Link that Instagram to a Facebook Page (Meta requirement for DMs &amp; automation).</li>
+            <li>Enable &quot;Allow Access to Messages&quot; in Instagram settings.</li>
           </ul>
         </div>
       </div>
