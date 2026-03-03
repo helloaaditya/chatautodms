@@ -149,8 +149,8 @@ export const FlowSetup: React.FC = () => {
     setSaveError(null);
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
         setSaveError('Please sign in again.');
         return;
       }
@@ -177,40 +177,27 @@ export const FlowSetup: React.FC = () => {
         askToFollow,
         followUp,
       };
-      if (editId) {
-        const updatePayload: Record<string, unknown> = {
-          trigger_type: triggerType,
-          trigger_keywords: keywords.length > 0 ? keywords : [],
-          is_active: true,
-          config,
-        };
-        const { error } = await supabase.from('automations').update(updatePayload).eq('id', editId);
-        if (error) {
-          setSaveError(error.message || 'Failed to update automation.');
-          return;
-        }
-        navigate('/automations');
-        return;
-      }
       const payload = {
-        user_id: user.id,
-        instagram_account_id: instagramAccountId,
+        ...(editId ? { id: editId } : {}),
         name,
         trigger_type: triggerType,
         trigger_keywords: keywords.length > 0 ? keywords : [],
         is_active: true,
         config,
+        ...(instagramAccountId && !editId ? { instagram_account_id: instagramAccountId } : {}),
       };
-      let result = await supabase.from('automations').insert(payload).select('id').single();
-      if (result.error && result.error.message?.includes('config')) {
-        const { config: _c, ...payloadWithoutConfig } = payload as { config: unknown; [k: string]: unknown };
-        result = await supabase.from('automations').insert(payloadWithoutConfig).select('id').single();
-      }
-      if (result.error) {
-        setSaveError(result.error.message || 'Failed to save automation.');
+      const res = await fetch('/api/save-automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSaveError(json?.error ?? 'Failed to save automation.');
         return;
       }
-      if (result.data?.id) navigate('/automations');
+      if (json?.id) navigate('/automations');
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Failed to save.');
     } finally {

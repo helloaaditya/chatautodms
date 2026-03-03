@@ -58,10 +58,9 @@ serve(async (req) => {
             const fromObj = v.from as Record<string, unknown> | undefined;
             const senderId = typeof fromObj?.id === "string" ? fromObj.id : null;
             const mediaObj = v.media as Record<string, unknown> | undefined;
-            const mediaId =
-              (typeof mediaObj?.id === "string" ? mediaObj.id : null) ??
-              (typeof v.media_id === "string" ? v.media_id : null) ??
-              (typeof v.original_media_id === "string" ? v.original_media_id : null);
+            const rawMediaId =
+              mediaObj?.id ?? v.media_id ?? v.original_media_id ?? null;
+            const mediaId = rawMediaId != null ? String(rawMediaId).trim() || null : null;
 
             if (commentId && senderId) {
               console.log("[webhook] comment received", { igAccountId, commentId, mediaId, text: commentText?.slice(0, 50) });
@@ -113,7 +112,11 @@ async function triggerAutomation(
 
   for (const automation of automations) {
     const rawKeywords = automation.trigger_keywords;
-    const keywords = Array.isArray(rawKeywords) ? rawKeywords : [];
+    const keywords = Array.isArray(rawKeywords)
+      ? rawKeywords
+      : typeof rawKeywords === "string"
+        ? [rawKeywords]
+        : [];
     const config = (automation.config as Record<string, unknown>) ?? {};
 
     // Keyword match: empty array = "any keyword" (match all)
@@ -121,11 +124,22 @@ async function triggerAutomation(
       keywords.length === 0 ||
       keywords.some((kw: string) => text.toLowerCase().includes(String(kw).toLowerCase()));
 
-    // For comments: optional post filter (Specific Post)
-    const selectedPostId = (config.selectedPostId as string) ?? (config.selected_media_id as string) ?? null;
-    const isPostMatch = !selectedPostId || (mediaId != null && String(selectedPostId) === String(mediaId));
+    // For comments: optional post filter (Specific Post) – normalize IDs for comparison
+    const rawSelected = (config.selectedPostId as string) ?? (config.selected_media_id as string) ?? null;
+    const selectedPostId = rawSelected ? String(rawSelected).trim() : null;
+    const normMediaId = mediaId != null ? String(mediaId).trim() : null;
+    const isPostMatch =
+      !selectedPostId ||
+      (normMediaId != null && selectedPostId === normMediaId);
 
-    if (!isKeywordMatch || !isPostMatch) continue;
+    if (!isKeywordMatch) {
+      console.log("[webhook] skip automation (keyword mismatch)", { automationId: automation.id, text: text?.slice(0, 30), keywords });
+      continue;
+    }
+    if (!isPostMatch) {
+      console.log("[webhook] skip automation (post mismatch)", { automationId: automation.id, selectedPostId, mediaId: normMediaId });
+      continue;
+    }
 
     const messageText = (config.message as string) ?? "";
 
