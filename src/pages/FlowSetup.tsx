@@ -92,6 +92,8 @@ export const FlowSetup: React.FC = () => {
       const list = Array.isArray(json?.data) ? json.data : [];
       setPosts(list);
       if (!res.ok && json?.error) setPostsError(json.error);
+      else if (list.length === 0 && (json?.message || json?.error)) setPostsError(json.message || json.error);
+      else setPostsError(null);
     } catch (e) {
       setPostsError(e instanceof Error ? e.message : 'Failed to load posts');
       setPosts([]);

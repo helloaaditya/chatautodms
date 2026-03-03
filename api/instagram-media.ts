@@ -88,23 +88,34 @@ export default async function handler(req: VercelReq, res: VercelRes) {
       return res.status(200).json({ data: [], message: 'Account token missing.' });
     }
 
-    const fields = 'id,media_type,media_url,thumbnail_url,permalink,timestamp';
-    const baseUrl = `https://graph.instagram.com/v21.0/${igId}/media?fields=${fields}&limit=24`;
+    type MediaItem = { id: string; media_type?: string; media_url?: string; thumbnail_url?: string; permalink?: string; timestamp?: string };
+    const fullFields = 'id,media_type,media_url,thumbnail_url,permalink,timestamp';
+    const minFields = 'id,media_type,permalink,timestamp';
 
-    let mediaRes = await fetch(`${baseUrl}&access_token=${encodeURIComponent(accessToken)}`);
-    let mediaJson = (await mediaRes.json()) as { data?: Array<{ id: string; media_type?: string; media_url?: string; thumbnail_url?: string; permalink?: string; timestamp?: string }>; error?: { message: string } };
+    const tryFetch = async (base: string, fieldsParam: string): Promise<{ data?: MediaItem[]; error?: { message: string } }> => {
+      const url = `${base}/${igId}/media?fields=${fieldsParam}&limit=24&access_token=${encodeURIComponent(accessToken)}`;
+      const r = await fetch(url);
+      return (await r.json()) as { data?: MediaItem[]; error?: { message: string } };
+    };
 
-    if (mediaJson.error?.message?.includes('method type: get')) {
-      mediaRes = await fetch(baseUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ access_token: accessToken }).toString(),
-      });
-      mediaJson = (await mediaRes.json()) as typeof mediaJson;
+    const hosts = ['https://graph.instagram.com/v21.0', 'https://graph.facebook.com/v21.0'];
+    let mediaJson: { data?: MediaItem[]; error?: { message: string } } = { error: { message: '' } };
+
+    for (const host of hosts) {
+      mediaJson = await tryFetch(host, fullFields);
+      if (mediaJson.data) break;
+      if (!mediaJson.error?.message?.includes('method type')) {
+        mediaJson = await tryFetch(host, minFields);
+        if (mediaJson.data) break;
+      }
     }
 
     if (mediaJson.error) {
-      return res.status(400).json({ error: mediaJson.error.message, data: [] });
+      return res.status(200).json({
+        data: [],
+        message: 'Couldn’t load posts for this account. Try reconnecting Instagram from Connect, or choose another account.',
+        error: mediaJson.error.message,
+      });
     }
 
     const list = mediaJson.data ?? [];
