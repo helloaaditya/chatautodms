@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { supabase } from './api/supabase';
 import { Layout } from './components/layout/Layout';
+import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 import { LandingPage } from './pages/Landing';
 import { AuthPage } from './pages/Auth';
 import { PrivacyPolicy } from './pages/Privacy';
@@ -51,6 +52,8 @@ const App: React.FC = () => {
   };
 
   return (
+    <>
+    <PwaInstallPrompt />
     <Routes>
       {/* Public Routes */}
       <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
@@ -71,6 +74,7 @@ const App: React.FC = () => {
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 };
 

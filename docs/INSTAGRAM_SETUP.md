@@ -1,6 +1,48 @@
-# Instagram Login – Fix "Invalid platform app"
+# Instagram Login – Fix "Invalid platform app" and "Invalid redirect_uri"
 
-If you see **Invalid Request: Invalid platform app** when connecting Instagram, the Meta app must be set up for **Instagram API with Instagram Login** and use the correct URLs/IDs.
+If you see **Invalid Request: Invalid platform app** or **Invalid redirect_uri** when connecting Instagram, fix the Meta app setup and redirect URI as below.
+
+---
+
+## Fix "Invalid redirect_uri"
+
+The redirect URI sent to Instagram **must match exactly** what you add in the Meta Dashboard (character-for-character).
+
+### Use the Instagram product (not Facebook Login)
+
+- Go to [developers.facebook.com](https://developers.facebook.com/apps) → your app.
+- Left menu: **Instagram** → **API setup with Instagram login**.
+- Open **Set up Instagram business login** → **Business login settings**.
+
+Do **not** add the URI only under **Facebook Login** → Settings. Instagram uses its **own** list under **Instagram** → Business login settings → **Valid OAuth Redirect URIs**.
+
+### Add the exact redirect URI
+
+In **Instagram** → **Set up Instagram business login** → **Business login settings** → **Valid OAuth Redirect URIs**:
+
+1. Add this **exact** URI (copy-paste; usually **no** trailing slash):
+
+   **Production:**
+   ```
+   https://chatautodms.vercel.app/auth/meta/callback
+   ```
+
+   **Local dev (optional):**
+   ```
+   http://localhost:5173/auth/meta/callback
+   ```
+
+2. If your dashboard already shows a URI **with** a trailing slash, set in Vercel / `.env.local`:
+   ```
+   VITE_META_REDIRECT_URI=https://chatautodms.vercel.app/auth/meta/callback/
+   ```
+3. Click **Save**.
+
+The app uses `VITE_META_REDIRECT_URI` if set; otherwise `window.location.origin + '/auth/meta/callback'`. So if you use a custom domain, set `VITE_META_REDIRECT_URI` to your full callback URL and add the **same** string in the dashboard.
+
+---
+
+## Fix "Invalid platform app"
 
 ## 1. Use the correct authorize URL
 
@@ -36,6 +78,7 @@ In [developers.facebook.com](https://developers.facebook.com/apps) → your app:
 
 - `VITE_META_APP_ID` = main Meta App ID (or use Instagram App ID if you prefer one ID everywhere).
 - `VITE_INSTAGRAM_APP_ID` = **Instagram App ID** from Business login settings (optional; if set, this is used for the Connect button instead of `VITE_META_APP_ID`).
+- `VITE_META_REDIRECT_URI` = optional; exact callback URL if it must match the dashboard (e.g. with trailing slash). Default: `origin + '/auth/meta/callback'`.
 
 **Supabase Edge Function secrets:**
 
