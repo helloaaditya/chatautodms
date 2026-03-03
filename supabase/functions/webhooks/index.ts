@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
-const WEBHOOK_VERIFY_TOKEN = Deno.env.get("WEBHOOK_VERIFY_TOKEN")!;
+const WEBHOOK_VERIFY_TOKEN = (Deno.env.get("WEBHOOK_VERIFY_TOKEN") ?? "").trim();
 
 serve(async (req) => {
   const supabase = createClient(
@@ -14,12 +14,17 @@ serve(async (req) => {
   // 1. WEBHOOK VERIFICATION (GET request from Meta)
   if (req.method === "GET") {
     const mode = url.searchParams.get("hub.mode");
-    const token = url.searchParams.get("hub.verify_token");
+    const token = (url.searchParams.get("hub.verify_token") ?? "").trim();
     const challenge = url.searchParams.get("hub.challenge");
 
-    if (mode === "subscribe" && token === WEBHOOK_VERIFY_TOKEN) {
+    if (!WEBHOOK_VERIFY_TOKEN) {
+      console.error("[webhook] WEBHOOK_VERIFY_TOKEN secret is not set in Supabase. Add it in Edge Functions → webhooks → Secrets.");
+      return new Response("Verification failed: token not configured", { status: 503 });
+    }
+    if (mode === "subscribe" && token === WEBHOOK_VERIFY_TOKEN && challenge) {
       return new Response(challenge, { status: 200 });
     }
+    console.error("[webhook] Verification failed: mode=" + mode + " token_match=" + (token === WEBHOOK_VERIFY_TOKEN) + " (set WEBHOOK_VERIFY_TOKEN in Supabase to the exact value from Meta's Verify token field)");
     return new Response("Verification failed", { status: 403 });
   }
 
