@@ -25,37 +25,47 @@ serve(async (req) => {
 
   // 2. WEBHOOK PROCESSING (POST request from Meta)
   if (req.method === "POST") {
-    const body = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response("Bad body", { status: 400 });
+    }
 
-    if (body.object === "instagram") {
-      for (const entry of body.entry) {
-        const igAccountId = entry.id;
+    if (body.object === "instagram" && Array.isArray(body.entry)) {
+      for (const entry of body.entry as Array<Record<string, unknown>>) {
+        const igAccountId = entry.id as string;
+        if (!igAccountId) continue;
 
         // A. Handle Messaging (DMs)
-        if (entry.messaging) {
-          for (const messageObj of entry.messaging) {
-            const senderId = messageObj.sender.id;
+        if (Array.isArray(entry.messaging)) {
+          for (const messageObj of entry.messaging as Array<{ sender?: { id?: string }; message?: { text?: string } }>) {
+            const senderId = messageObj.sender?.id;
             const messageText = messageObj.message?.text;
-
-            if (messageText) {
-              // Trigger Automation Engine for DMs
+            if (senderId && messageText) {
               await triggerAutomation(supabase, igAccountId, senderId, messageText, "dm");
             }
           }
         }
 
-        // B. Handle Changes (Comments)
-        if (entry.changes) {
-          for (const change of entry.changes) {
-            if (change.field === "comments") {
-              const commentId = change.value.id;
-              const commentText = change.value.text ?? "";
-              const senderId = change.value.from?.id;
-              const mediaId = change.value.media?.id ?? change.value.original_media_id ?? null;
+        // B. Handle Changes (Comments) – support both full value object and minimal payloads
+        if (Array.isArray(entry.changes)) {
+          for (const change of entry.changes as Array<{ field?: string; value?: Record<string, unknown> }>) {
+            if (change.field !== "comments" || !change.value) continue;
+            const v = change.value as Record<string, unknown>;
+            const commentId = typeof v.id === "string" ? v.id : null;
+            const commentText = typeof v.text === "string" ? v.text : "";
+            const fromObj = v.from as Record<string, unknown> | undefined;
+            const senderId = typeof fromObj?.id === "string" ? fromObj.id : null;
+            const mediaObj = v.media as Record<string, unknown> | undefined;
+            const mediaId =
+              (typeof mediaObj?.id === "string" ? mediaObj.id : null) ??
+              (typeof v.media_id === "string" ? v.media_id : null) ??
+              (typeof v.original_media_id === "string" ? v.original_media_id : null);
 
-              if (senderId) {
-                await triggerAutomation(supabase, igAccountId, senderId, commentText, "comment", { commentId, mediaId });
-              }
+            if (commentId && senderId) {
+              console.log("[webhook] comment received", { igAccountId, commentId, mediaId, text: commentText?.slice(0, 50) });
+              await triggerAutomation(supabase, igAccountId, senderId, commentText, "comment", { commentId, mediaId });
             }
           }
         }
@@ -91,39 +101,51 @@ async function triggerAutomation(
 
   const { data: automations } = await supabase
     .from("automations")
-    .select("*, flows(*)")
+    .select("id, user_id, trigger_keywords, config, flows(*)")
     .eq("instagram_account_id", accountUuid)
     .eq("trigger_type", type)
     .eq("is_active", true);
 
   if (!automations?.length) return;
 
-  const commentId = commentPayload?.commentId;
+  const commentId = commentPayload?.commentId ?? null;
   const mediaId = commentPayload?.mediaId ?? null;
 
   for (const automation of automations) {
-    const keywords = automation.trigger_keywords || [];
-    const config = automation.config ?? {};
+    const rawKeywords = automation.trigger_keywords;
+    const keywords = Array.isArray(rawKeywords) ? rawKeywords : [];
+    const config = (automation.config as Record<string, unknown>) ?? {};
 
     // Keyword match: empty array = "any keyword" (match all)
-    const isKeywordMatch = keywords.length === 0 || keywords.some((kw: string) => text.toLowerCase().includes(String(kw).toLowerCase()));
+    const isKeywordMatch =
+      keywords.length === 0 ||
+      keywords.some((kw: string) => text.toLowerCase().includes(String(kw).toLowerCase()));
 
     // For comments: optional post filter (Specific Post)
-    const selectedPostId = config.selectedPostId ?? config.selected_media_id;
-    const isPostMatch = !selectedPostId || (mediaId && String(selectedPostId) === String(mediaId));
+    const selectedPostId = (config.selectedPostId as string) ?? (config.selected_media_id as string) ?? null;
+    const isPostMatch = !selectedPostId || (mediaId != null && String(selectedPostId) === String(mediaId));
 
     if (!isKeywordMatch || !isPostMatch) continue;
 
-    const messageText = config.message ?? "";
+    const messageText = (config.message as string) ?? "";
 
-    if (type === "comment" && commentId && messageText.trim()) {
-      const sent = await sendPrivateReply(accountRow.instagram_business_id, accountRow.access_token, commentId, messageText.trim());
+    if (type === "comment" && commentId && String(messageText).trim()) {
+      const sent = await sendPrivateReply(
+        accountRow.instagram_business_id,
+        accountRow.access_token,
+        commentId,
+        String(messageText).trim()
+      );
       if (sent) {
-        await supabase.from("analytics").insert({
-          instagram_account_id: accountUuid,
-          automation_id: automation.id,
-          event_type: "message_sent"
-        }).catch(() => {});
+        await supabase
+          .from("analytics")
+          .insert({
+            user_id: automation.user_id ?? null,
+            instagram_account_id: accountUuid,
+            automation_id: automation.id,
+            event_type: "message_sent",
+          })
+          .catch(() => {});
       }
       continue;
     }

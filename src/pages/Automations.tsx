@@ -24,6 +24,8 @@ export const Automations: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
 
   const fetchAutomations = async () => {
     const { data, error } = await supabase
@@ -33,6 +35,43 @@ export const Automations: React.FC = () => {
     
     if (data) setAutomations(data);
     setLoading(false);
+  };
+
+  const handleEdit = (id: string) => {
+    navigate(`/automations/edit/${id}`);
+  };
+
+  const handleBuildFlow = (id: string) => {
+    navigate(`/automations/edit/${id}`);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this automation? This cannot be undone.')) return;
+    setDeletingId(id);
+    const { error } = await supabase.from('automations').delete().eq('id', id);
+    setDeletingId(null);
+    if (!error) fetchAutomations();
+  };
+
+  const handleCopy = async (a: Automation) => {
+    setCopyingId(a.id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setCopyingId(null);
+      return;
+    }
+    const copyPayload = {
+      user_id: user.id,
+      instagram_account_id: a.instagram_account_id,
+      name: `Copy of ${a.name}`,
+      trigger_type: a.trigger_type,
+      trigger_keywords: a.trigger_keywords ?? [],
+      is_active: false,
+      config: (a as { config?: unknown }).config ?? {},
+    };
+    const { error } = await supabase.from('automations').insert(copyPayload);
+    setCopyingId(null);
+    if (!error) fetchAutomations();
   };
 
   useEffect(() => {
@@ -133,17 +172,34 @@ export const Automations: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors">
+                    <button
+                      onClick={() => handleEdit(automation.id)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors"
+                      title="Edit"
+                    >
                       <Edit3 size={18} />
                     </button>
-                    <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
+                    <button
+                      onClick={() => handleCopy(automation)}
+                      disabled={!!copyingId}
+                      className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors disabled:opacity-50"
+                      title="Copy"
+                    >
                       <Copy size={18} />
                     </button>
-                    <button className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+                    <button
+                      onClick={() => handleDelete(automation.id)}
+                      disabled={!!deletingId}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50"
+                      title="Delete"
+                    >
                       <Trash2 size={18} />
                     </button>
                     <div className="w-px h-8 bg-gray-100 dark:bg-gray-700 mx-2" />
-                    <button className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all flex items-center gap-2 group/btn">
+                    <button
+                      onClick={() => handleBuildFlow(automation.id)}
+                      className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all flex items-center gap-2 group/btn"
+                    >
                       Build Flow
                       <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
                     </button>

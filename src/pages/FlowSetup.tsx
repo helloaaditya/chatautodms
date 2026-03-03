@@ -16,11 +16,16 @@ type InstagramPost = {
 };
 
 export const FlowSetup: React.FC = () => {
-  const { templateId } = useParams<{ templateId: string }>();
+  const { templateId, automationId } = useParams<{ templateId?: string; automationId?: string }>();
   const navigate = useNavigate();
-  const template = TEMPLATES.find((t) => t.id === (templateId as TemplateId));
+  const templateFromNew = templateId ? TEMPLATES.find((t) => t.id === (templateId as TemplateId)) : null;
+  const [loadedTemplate, setLoadedTemplate] = useState<typeof TEMPLATES[0] | null>(templateFromNew ?? null);
+  const [editId, setEditId] = useState<string | null>(automationId ?? null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const template = loadedTemplate ?? templateFromNew;
 
   const [postMode, setPostMode] = useState<'specific' | 'next'>('specific');
+  const [loadingEdit, setLoadingEdit] = useState(!!automationId);
   const [posts, setPosts] = useState<InstagramPost[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [postsError, setPostsError] = useState<string | null>(null);
@@ -79,6 +84,45 @@ export const FlowSetup: React.FC = () => {
     checkAccount();
   }, []);
 
+  // Load existing automation when editing
+  useEffect(() => {
+    if (!automationId) {
+      setLoadingEdit(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadError(null);
+      const { data, error } = await supabase
+        .from('automations')
+        .select('id, name, trigger_type, trigger_keywords, config')
+        .eq('id', automationId)
+        .single();
+      if (cancelled) return;
+      if (error || !data) {
+        setLoadError(error?.message ?? 'Automation not found');
+        setLoadingEdit(false);
+        return;
+      }
+      setEditId(data.id);
+      const cfg = (data.config as Record<string, unknown>) ?? {};
+      const tid = (cfg.templateId as string) ?? 'comment_to_dm';
+      setLoadedTemplate(TEMPLATES.find((t) => t.id === (tid as TemplateId)) ?? TEMPLATES[0]);
+      setPostMode((cfg.postMode as 'specific' | 'next') ?? 'specific');
+      setSelectedPostId((cfg.selectedPostId as string) ?? null);
+      const kw = cfg.trigger_keywords ?? data.trigger_keywords ?? [];
+      setKeywords(Array.isArray(kw) ? kw : []);
+      setAnyKeyword(!Array.isArray(kw) || kw.length === 0);
+      setMessage((cfg.message as string) ?? '');
+      setOpeningMessage(!!cfg.openingMessage);
+      setPublicReply(!!cfg.publicReply);
+      setAskToFollow(!!cfg.askToFollow);
+      setFollowUp(!!cfg.followUp);
+      setLoadingEdit(false);
+    })();
+    return () => { cancelled = true; };
+  }, [automationId]);
+
   useEffect(() => {
     if (postMode === 'specific' && hasAccount) {
       fetchPosts();
@@ -117,12 +161,12 @@ export const FlowSetup: React.FC = () => {
         .limit(1)
         .order('created_at', { ascending: false });
       const instagramAccountId = accounts?.[0]?.id;
-      if (!instagramAccountId) {
+      if (!instagramAccountId && !editId) {
         setSaveError('Connect an Instagram account first.');
         return;
       }
       const triggerType = templateToTriggerType[template.id] ?? 'comment';
-      const name = `${template.title} – ${new Date().toLocaleDateString()}`;
+      const name = editId ? undefined : `${template.title} – ${new Date().toLocaleDateString()}`;
       const config = {
         templateId: template.id,
         postMode,
@@ -133,6 +177,21 @@ export const FlowSetup: React.FC = () => {
         askToFollow,
         followUp,
       };
+      if (editId) {
+        const updatePayload: Record<string, unknown> = {
+          trigger_type: triggerType,
+          trigger_keywords: keywords.length > 0 ? keywords : [],
+          is_active: true,
+          config,
+        };
+        const { error } = await supabase.from('automations').update(updatePayload).eq('id', editId);
+        if (error) {
+          setSaveError(error.message || 'Failed to update automation.');
+          return;
+        }
+        navigate('/automations');
+        return;
+      }
       const payload = {
         user_id: user.id,
         instagram_account_id: instagramAccountId,
@@ -144,7 +203,7 @@ export const FlowSetup: React.FC = () => {
       };
       let result = await supabase.from('automations').insert(payload).select('id').single();
       if (result.error && result.error.message?.includes('config')) {
-        const { config: _c, ...payloadWithoutConfig } = payload;
+        const { config: _c, ...payloadWithoutConfig } = payload as { config: unknown; [k: string]: unknown };
         result = await supabase.from('automations').insert(payloadWithoutConfig).select('id').single();
       }
       if (result.error) {
@@ -159,6 +218,24 @@ export const FlowSetup: React.FC = () => {
     }
   };
 
+  if (loadingEdit) {
+    return (
+      <div className="p-8 flex items-center gap-3">
+        <Loader2 className="animate-spin" size={24} />
+        <span>Loading automation…</span>
+      </div>
+    );
+  }
+  if (loadError) {
+    return (
+      <div className="p-8">
+        <button onClick={() => navigate('/automations')} className="text-blue-600 hover:underline flex items-center gap-2">
+          <ArrowLeft size={18} /> Back to Automations
+        </button>
+        <p className="mt-4 text-red-500">{loadError}</p>
+      </div>
+    );
+  }
   if (!template) {
     return (
       <div className="p-8">

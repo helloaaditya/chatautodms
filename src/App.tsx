@@ -68,6 +68,7 @@ const App: React.FC = () => {
       <Route path="/connect" element={<ProtectedRoute><ConnectInstagram /></ProtectedRoute>} />
       <Route path="/automations" element={<ProtectedRoute><Automations /></ProtectedRoute>} />
       <Route path="/automations/new/:templateId" element={<ProtectedRoute><FlowSetup /></ProtectedRoute>} />
+      <Route path="/automations/edit/:automationId" element={<ProtectedRoute><FlowSetup /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
       <Route path="/leads" element={<ProtectedRoute><div className="p-8">Leads Page (Coming Soon)</div></ProtectedRoute>} />
       <Route path="/billing" element={<ProtectedRoute><div className="p-8">Billing Page (Coming Soon)</div></ProtectedRoute>} />
