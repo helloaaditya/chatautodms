@@ -25,11 +25,17 @@ serve(async (req) => {
 
   // 2. WEBHOOK PROCESSING (POST request from Meta)
   if (req.method === "POST") {
+    console.log("[webhook] POST received – Instagram webhook hit");
     let body: Record<string, unknown>;
     try {
       body = await req.json();
     } catch {
       return new Response("Bad body", { status: 400 });
+    }
+    const obj = body.object;
+    const hasEntry = Array.isArray(body.entry);
+    if (obj !== "instagram" || !hasEntry) {
+      console.log("[webhook] Ignoring payload – object:", obj, "entries:", hasEntry ? body.entry?.length : 0);
     }
 
     if (body.object === "instagram" && Array.isArray(body.entry)) {
