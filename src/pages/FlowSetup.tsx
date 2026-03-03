@@ -1,9 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Shuffle, Plus, ImageUp, Play } from 'lucide-react';
+import { ArrowLeft, Shuffle, Plus, ImageUp, Play, Loader2 } from 'lucide-react';
 import { TEMPLATES, type TemplateId } from '../components/TemplatesModal';
+import { supabase } from '../api/supabase';
 
 const MAX_MESSAGE_LENGTH = 1000;
+
+type InstagramPost = {
+  id: string;
+  media_type?: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  permalink?: string;
+  timestamp?: string;
+};
 
 export const FlowSetup: React.FC = () => {
   const { templateId } = useParams<{ templateId: string }>();
@@ -11,6 +21,11 @@ export const FlowSetup: React.FC = () => {
   const template = TEMPLATES.find((t) => t.id === (templateId as TemplateId));
 
   const [postMode, setPostMode] = useState<'specific' | 'next'>('specific');
+  const [posts, setPosts] = useState<InstagramPost[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [postsError, setPostsError] = useState<string | null>(null);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [hasAccount, setHasAccount] = useState<boolean | null>(null);
   const [anyKeyword, setAnyKeyword] = useState(true);
   const [keywords, setKeywords] = useState<string[]>([]);
   const [keywordInput, setKeywordInput] = useState('');
@@ -19,6 +34,50 @@ export const FlowSetup: React.FC = () => {
   const [publicReply, setPublicReply] = useState(false);
   const [askToFollow, setAskToFollow] = useState(false);
   const [followUp, setFollowUp] = useState(false);
+
+  const fetchPosts = useCallback(async () => {
+    setPostsLoading(true);
+    setPostsError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setHasAccount(false);
+        setPosts([]);
+        return;
+      }
+      const res = await fetch('/api/instagram-media', {
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      const list = Array.isArray(json?.data) ? json.data : [];
+      setPosts(list);
+      setHasAccount(true);
+      if (!res.ok && json?.error) setPostsError(json.error);
+    } catch (e) {
+      setPostsError(e instanceof Error ? e.message : 'Failed to load posts');
+      setPosts([]);
+    } finally {
+      setPostsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const checkAccount = async () => {
+      const { data } = await supabase.from('instagram_accounts').select('id').limit(1);
+      setHasAccount(Array.isArray(data) && data.length > 0);
+    };
+    checkAccount();
+  }, []);
+
+  useEffect(() => {
+    if (postMode === 'specific' && hasAccount) {
+      fetchPosts();
+    } else if (postMode === 'next') {
+      setPosts([]);
+      setSelectedPostId(null);
+    }
+  }, [postMode, hasAccount, fetchPosts]);
 
   const addKeyword = () => {
     const k = keywordInput.trim();
@@ -110,12 +169,45 @@ export const FlowSetup: React.FC = () => {
           {postMode === 'specific' && (
             <div className="mt-4">
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Choose a Post:</p>
-              <div className="flex gap-2 flex-wrap">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="w-20 h-20 rounded-lg bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
-                ))}
-              </div>
-              <button type="button" className="mt-2 text-sm text-blue-600 dark:text-blue-400 font-medium hover:underline">Show More</button>
+              {hasAccount === false && (
+                <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">Connect an Instagram account first from Instagram Accounts.</p>
+              )}
+              {hasAccount === true && postsLoading && (
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 py-4">
+                  <Loader2 size={18} className="animate-spin" /> Loading posts…
+                </div>
+              )}
+              {hasAccount === true && !postsLoading && postsError && (
+                <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{postsError}</p>
+              )}
+              {hasAccount === true && !postsLoading && !postsError && posts.length === 0 && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 py-4">No posts found. Post something on Instagram and try again.</p>
+              )}
+              {hasAccount === true && !postsLoading && posts.length > 0 && (
+                <>
+                  <div className="flex gap-2 flex-wrap">
+                    {posts.map((post) => {
+                      const thumb = post.thumbnail_url || post.media_url;
+                      const isSelected = selectedPostId === post.id;
+                      return (
+                        <button
+                          key={post.id}
+                          type="button"
+                          onClick={() => setSelectedPostId(isSelected ? null : post.id)}
+                          className={`w-20 h-20 rounded-lg flex-shrink-0 overflow-hidden border-2 transition-all ${isSelected ? 'border-blue-600 ring-2 ring-blue-200 dark:ring-blue-800' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'}`}
+                        >
+                          {thumb ? (
+                            <img src={thumb} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400 text-xs">Media</div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button type="button" onClick={fetchPosts} className="mt-2 text-sm text-blue-600 dark:text-blue-400 font-medium hover:underline">Refresh posts</button>
+                </>
+              )}
             </div>
           )}
         </section>
