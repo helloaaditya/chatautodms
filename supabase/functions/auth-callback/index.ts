@@ -63,18 +63,28 @@ serve(async (req) => {
       const shortLivedToken = shortLived?.access_token ?? tokenData.access_token;
       const igUserId = shortLived?.user_id ?? tokenData.user_id;
       if (!shortLivedToken) {
+        console.error("[auth-callback] Token exchange failed:", JSON.stringify(tokenData).slice(0, 200));
         throw new Error(tokenData.error_message ?? tokenData.error?.message ?? "Failed to get token from Instagram");
       }
+      console.log("[auth-callback] Short-lived token ok, exchanging for long-lived");
 
-      const longRes = await fetch(
-        `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${IG_APP_SECRET}&access_token=${shortLivedToken}`
-      );
+      const longRes = await fetch("https://graph.instagram.com/access_token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "ig_exchange_token",
+          client_secret: IG_APP_SECRET,
+          access_token: shortLivedToken,
+        }),
+      });
       const longData = await longRes.json();
       const longLivedToken = longData.access_token;
       const expires_in = longData.expires_in ?? 5184000;
       if (!longLivedToken) {
+        console.error("[auth-callback] Long-lived exchange failed:", longData?.error?.message);
         throw new Error(longData.error?.message ?? "Failed to get long-lived token");
       }
+      console.log("[auth-callback] Long-lived token ok, fetching /me");
 
       const meRes = await fetch(
         `https://graph.instagram.com/v21.0/me?fields=id,user_id,username,name,profile_picture_url&access_token=${longLivedToken}`
@@ -87,6 +97,7 @@ serve(async (req) => {
         console.error("[auth-callback] /me response missing id:", JSON.stringify(meRaw).slice(0, 300));
         throw new Error("Could not get Instagram account id");
       }
+      console.log("[auth-callback] Got igId:", String(igId).slice(0, 15) + "...");
 
       // Ensure profile exists (required: instagram_accounts.user_id -> profiles.id)
       await supabase.rpc("ensure_profile_exists", { p_user_id: userId }).catch(() => {});
@@ -106,6 +117,7 @@ serve(async (req) => {
         console.error("[auth-callback] Profile upsert failed:", profileErr.message);
         throw new Error("Could not create profile. Please try again or contact support.");
       }
+      console.log("[auth-callback] Profile ok, inserting instagram_accounts");
 
       const accountName = meData?.username ?? meData?.name ?? meRaw?.username ?? meRaw?.name ?? "Instagram";
       const { data: insertedRows, error } = await supabase
