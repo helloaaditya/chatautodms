@@ -18,58 +18,61 @@ export const ConnectInstagram: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
 
-  const fetchAccounts = async () => {
+  const fetchAccounts = React.useCallback(async () => {
     setError(null);
-    let list: InstagramAccount[] = [];
-
-    // Get session first so we can send token (session often in localStorage, not cookie)
+    // 1) API with Bearer token (service role)
     const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
-
-    // 1) API route with Bearer token (service role = no RLS issues)
-    if (token) {
+    let list: InstagramAccount[] = [];
+    if (session?.access_token) {
       try {
         const res = await fetch('/api/instagram-accounts', {
           credentials: 'include',
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${session.access_token}` },
         });
         const data = await res.json().catch(() => null);
         if (res.ok && Array.isArray(data)) list = data;
-        if (!res.ok && res.status !== 401) {
-          const msg = typeof data?.error === 'string' ? data.error : 'API error';
-          setError(msg);
-        }
+        if (!res.ok && res.status !== 401) setError(typeof data?.error === 'string' ? data.error : 'API error');
       } catch {
-        // fall through to direct Supabase
+        /* ignore */
       }
     }
-
-    // 2) Fallback: direct Supabase (RLS with current session)
-    if (list.length === 0) {
-      const { data: supabaseData, error: supabaseError } = await supabase
-        .from('instagram_accounts')
-        .select('*');
-      if (supabaseError) setError(supabaseError.message);
-      if (supabaseData?.length) list = supabaseData;
-    }
-
+    // 2) Direct Supabase (RLS) - always run so we have one source of truth
+    const { data: supabaseData, error: supabaseError } = await supabase.from('instagram_accounts').select('*');
+    if (supabaseError) setError(supabaseError.message);
+    if (supabaseData?.length) list = supabaseData;
     setAccounts(list);
     setLoading(false);
-  };
+  }, []);
 
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Wait for session to be known before first fetch (avoids RLS seeing no user)
   useEffect(() => {
-    fetchAccounts();
+    let cancelled = false;
+    supabase.auth.getSession().then(() => {
+      if (!cancelled) setSessionReady(true);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      if (!cancelled) setSessionReady(true);
+    });
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // Refetch when page becomes visible (e.g. returning from OAuth or switching tabs)
   useEffect(() => {
-    const onFocus = () => fetchAccounts();
+    if (!sessionReady) return;
+    fetchAccounts();
+  }, [sessionReady, fetchAccounts]);
+
+  useEffect(() => {
+    const onFocus = () => sessionReady && fetchAccounts();
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, []);
+  }, [sessionReady, fetchAccounts]);
 
   useEffect(() => {
     const success = searchParams.get('success');
@@ -79,10 +82,10 @@ export const ConnectInstagram: React.FC = () => {
       setError(null);
       setLoading(true);
       fetchAccounts();
-      // Refetch after delays (DB commit / replication can be delayed)
-      const t1 = setTimeout(() => fetchAccounts(), 800);
-      const t2 = setTimeout(() => fetchAccounts(), 2500);
-      return () => { clearTimeout(t1); clearTimeout(t2); };
+      // Aggressive retries after OAuth (DB can be delayed)
+      const timers: ReturnType<typeof setTimeout>[] = [];
+      [1, 2, 4, 6, 10].forEach((sec, i) => timers.push(setTimeout(() => fetchAccounts(), sec * 1000)));
+      return () => timers.forEach(clearTimeout);
     }
     if (errorParam) {
       const decoded = decodeURIComponent(errorParam);
