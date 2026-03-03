@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../api/supabase';
-import { Instagram, Plus, RefreshCcw, Trash2, CheckCircle2, AlertCircle, Loader2, MessageSquare, ArrowRight } from 'lucide-react';
+import { Instagram, Plus, RefreshCcw, Trash2, CheckCircle2, AlertCircle, Loader2, MessageSquare, ArrowRight, ArrowLeftRight } from 'lucide-react';
 import { InstagramAccount } from '../types';
 
 // instagram_manage_messages requires App Review approval - add after connecting
@@ -171,37 +171,47 @@ export const ConnectInstagram: React.FC = () => {
           ))}
         </div>
       ) : accounts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 px-4 bg-white dark:bg-gray-800 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700 text-center">
-          <div className="w-20 h-20 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mb-6">
-            <Instagram className="text-blue-600 dark:text-blue-400" size={40} />
-          </div>
-          <h3 className="text-xl font-bold">Connect your Instagram</h3>
-          <p className="text-gray-500 mt-2 max-w-md">
-            Connect your Instagram to set up auto DMs, comment replies, and lead capture. One-time sign-in is used only to link your account.
-          </p>
-          <p className="text-xs text-gray-400 mt-2 max-w-md">
-            For business features, Meta requires your Instagram to be a Professional account linked to a Page. You can create a Page in one step during connect.
-          </p>
-          <div className="mt-8 space-y-4">
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <button
-                onClick={() => { setLoading(true); fetchAccounts(); }}
-                disabled={loading}
-                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-medium transition-colors flex items-center gap-2 justify-center"
-              >
-                <RefreshCcw size={18} className={loading ? 'animate-spin' : ''} />
-                Refresh list
-              </button>
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden flex flex-col md:flex-row">
+            <div className="p-8 md:p-10 flex-1 flex flex-col justify-center">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                  C
+                </div>
+                <ArrowLeftRight className="text-gray-400 dark:text-gray-500 shrink-0" size={24} />
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center text-white shadow-lg">
+                  <Instagram size={24} strokeWidth={2} />
+                </div>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Connect Instagram</h2>
+              <p className="text-gray-600 dark:text-gray-400 mt-2">
+                Use your Instagram account to connect to ChatAutoDM.
+              </p>
               <button
                 onClick={handleConnect}
                 disabled={connecting}
-                className="px-8 py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-70 text-white rounded-xl font-semibold transition-colors flex items-center gap-2 justify-center"
+                className="mt-6 w-full py-3.5 px-6 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-70 transition-all shadow-lg shadow-purple-500/25 flex items-center justify-center gap-2"
               >
-                {connecting ? <Loader2 size={20} className="animate-spin" /> : <Instagram size={20} />}
-                {connecting ? 'Connecting...' : 'Connect Instagram'}
+                {connecting ? <Loader2 size={22} className="animate-spin" /> : <Instagram size={22} />}
+                {connecting ? 'Connecting...' : 'Go To Instagram'}
+              </button>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
+                Log in with Instagram and set your permissions. Once that&apos;s done, you&apos;re all set to connect to ChatAutoDM!
+              </p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-6">
+                By continuing, you agree to our <a href="/terms" className="underline hover:text-gray-600">Terms of Service</a> and <a href="/privacy" className="underline hover:text-gray-600">Privacy Policy</a>.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setLoading(true); fetchAccounts(); }}
+                disabled={loading}
+                className="mt-4 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 flex items-center gap-1.5"
+              >
+                <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} />
+                Refresh list
               </button>
             </div>
-            <p className="text-xs text-gray-400 mt-2">Uses Meta sign-in once to connect your Instagram</p>
+            <div className="hidden md:block w-72 bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 shrink-0" aria-hidden />
           </div>
         </div>
       ) : (
@@ -274,19 +284,16 @@ export const ConnectInstagram: React.FC = () => {
         </>
       )}
 
-      <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-2xl p-6 flex gap-4">
-        <div className="p-2 bg-blue-100 dark:bg-blue-800 rounded-xl h-fit">
-          <AlertCircle className="text-blue-600 dark:text-blue-400" size={24} />
-        </div>
-        <div>
-          <h4 className="font-bold text-blue-900 dark:text-blue-100">Before you connect</h4>
-          <ul className="mt-2 text-sm text-blue-700 dark:text-blue-300 space-y-1.5 list-disc list-inside">
-            <li>Use a <span className="font-semibold">Professional or Creator</span> Instagram account.</li>
-            <li>Link that Instagram to a Facebook Page (Meta requirement for DMs &amp; automation).</li>
-            <li>Enable &quot;Allow Access to Messages&quot; in Instagram settings.</li>
-          </ul>
-        </div>
-      </div>
+      <details className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-2xl p-4">
+        <summary className="text-sm font-medium text-gray-600 dark:text-gray-400 cursor-pointer list-none flex items-center gap-2">
+          <AlertCircle size={18} />
+          Tips for connecting
+        </summary>
+        <ul className="mt-3 text-sm text-gray-600 dark:text-gray-400 space-y-1.5 list-disc list-inside pl-1">
+          <li>Use a Professional or Creator Instagram account.</li>
+          <li>Enable &quot;Allow Access to Messages&quot; in Instagram settings.</li>
+        </ul>
+      </details>
     </div>
   );
 };
