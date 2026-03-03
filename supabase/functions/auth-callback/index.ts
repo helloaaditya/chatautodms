@@ -58,15 +58,22 @@ serve(async (req) => {
     const longLivedRes = await fetch(
       `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${APP_ID}&client_secret=${APP_SECRET}&fb_exchange_token=${shortLivedToken}`
     );
-    const { access_token: longLivedToken, expires_in } = await longLivedRes.json();
+    const longLivedJson = await longLivedRes.json();
+    const longLivedToken = longLivedJson.access_token;
+    const expires_in = longLivedJson.expires_in;
+    if (!longLivedToken) {
+      const errMsg = longLivedJson.error?.message ?? "Failed to get long-lived token. Check META_APP_ID and META_APP_SECRET.";
+      throw new Error(errMsg);
+    }
 
     // 3. Fetch User's Pages
     const pagesRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${longLivedToken}`);
     const pagesData = await pagesRes.json();
+    if (pagesData.error) throw new Error(pagesData.error.message ?? "Facebook API error when loading Pages.");
     const pages = pagesData.data ?? [];
 
     if (pages.length === 0) {
-      throw new Error("No Facebook Pages found. Connect a Page to your Instagram Business account first.");
+      throw new Error("No Facebook Pages found. Create a Facebook Page and connect it to your Instagram (Professional account).");
     }
 
     let storedCount = 0;
@@ -78,18 +85,22 @@ serve(async (req) => {
       if (pageData.instagram_business_account) {
         const igAccountId = pageData.instagram_business_account.id;
 
-        // 5. Ensure profile exists (RPC or admin fallback)
+        // 5. Ensure profile exists (required: instagram_accounts.user_id -> profiles.id)
         const rpcOk = await supabase.rpc("ensure_profile_exists", { p_user_id: userId }).then(() => true).catch(() => false);
         if (!rpcOk) {
-          const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+          const { data: authUser, error: authErr } = await supabase.auth.admin.getUserById(userId);
           const email = authUser?.user?.email ?? `${userId}@placeholder.local`;
-          await supabase.from("profiles").upsert({
+          const { error: profileErr } = await supabase.from("profiles").upsert({
             id: userId,
             email,
             full_name: authUser?.user?.user_metadata?.full_name ?? null,
             avatar_url: authUser?.user?.user_metadata?.avatar_url ?? null,
             updated_at: new Date().toISOString(),
           }, { onConflict: "id", ignoreDuplicates: true });
+          if (profileErr) {
+            console.error("[auth-callback] Profile upsert failed:", profileErr.message);
+            throw new Error("Could not create profile. In Supabase SQL Editor run: SELECT * FROM auth.users LIMIT 1; then run the migrations (ensure_profile_exists).");
+          }
         }
 
         // 6. Store in Database
