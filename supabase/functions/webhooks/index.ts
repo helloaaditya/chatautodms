@@ -17,15 +17,24 @@ serve(async (req) => {
     const token = (url.searchParams.get("hub.verify_token") ?? "").trim();
     const challenge = url.searchParams.get("hub.challenge");
 
-    if (!WEBHOOK_VERIFY_TOKEN) {
-      console.error("[webhook] WEBHOOK_VERIFY_TOKEN secret is not set in Supabase. Add it in Edge Functions → webhooks → Secrets.");
-      return new Response("Verification failed: token not configured", { status: 503 });
+    // Meta sends hub.mode=subscribe, hub.verify_token=..., hub.challenge=... when you click "Verify and save"
+    if (mode === "subscribe") {
+      if (!WEBHOOK_VERIFY_TOKEN) {
+        console.error("[webhook] WEBHOOK_VERIFY_TOKEN secret is not set in Supabase.");
+        return new Response("Verification failed: token not configured", { status: 503 });
+      }
+      if (token === WEBHOOK_VERIFY_TOKEN && challenge) {
+        return new Response(challenge, { status: 200 });
+      }
+      console.error("[webhook] Verification failed: token mismatch. In Supabase set WEBHOOK_VERIFY_TOKEN to the exact value you entered in Meta's Verify token field.");
+      return new Response("Verification failed", { status: 403 });
     }
-    if (mode === "subscribe" && token === WEBHOOK_VERIFY_TOKEN && challenge) {
-      return new Response(challenge, { status: 200 });
-    }
-    console.error("[webhook] Verification failed: mode=" + mode + " token_match=" + (token === WEBHOOK_VERIFY_TOKEN) + " (set WEBHOOK_VERIFY_TOKEN in Supabase to the exact value from Meta's Verify token field)");
-    return new Response("Verification failed", { status: 403 });
+
+    // Browser or other GET with no hub params – don't return 403
+    return new Response(
+      "Instagram webhook endpoint. Verification only runs when Meta sends the request (use Verify and save in Meta App Dashboard → Instagram → Webhooks).",
+      { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } }
+    );
   }
 
   // 2. WEBHOOK PROCESSING (POST request from Meta)
