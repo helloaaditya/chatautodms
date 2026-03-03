@@ -90,15 +90,6 @@ In [developers.facebook.com](https://developers.facebook.com/apps) → your app:
 
 If the Instagram App ID/Secret are the same as the main app, you can leave `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET` unset and the function will use `META_APP_ID` / `META_APP_SECRET`.
 
-## 4. Same Instagram account on every device/browser
-
-If **everyone** sees the same account (e.g. _pastel._eris) when connecting—even on a different device, browser, location, or app login:
-
-- Your Meta app is in **Development** mode. In that mode, **only Instagram accounts added as Instagram Testers** can connect.
-- **Fix:** In [Meta for Developers](https://developers.facebook.com/apps) → your app → **Roles** → **Instagram Testers**, **add each Instagram account** that should be able to connect. Each person must **accept the tester invite** from their Instagram account.
-- After that, each person should **log into Instagram** (in that browser/device) as the account they want to connect, then click Connect in your app. They will then see “Allow” for their own account.
-- To allow any Instagram account (no tester list): switch the app to **Live** mode in the Meta Dashboard (requires App Review for the permissions you use).
-
-## 5. After fixing
+## 4. After fixing
 
 Redeploy the frontend and the `auth-callback` Edge Function, then try **Go To Instagram** again. Use an **Incognito/private** window if you had cached errors. The account you use must be an **Instagram Tester** while the app is in development.

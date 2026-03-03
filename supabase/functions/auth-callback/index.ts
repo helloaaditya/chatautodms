@@ -10,6 +10,12 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // DEBUG: Log full URL (remove in production)
+  const fullUrl = req.url;
+  console.log("[auth-callback] Full URL:", fullUrl);
+  console.log("[auth-callback] Has code:", fullUrl.includes("code="));
+  console.log("[auth-callback] Has state:", fullUrl.includes("state="));
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -33,8 +39,6 @@ serve(async (req) => {
   const redirectBase = isInstagramLogin ? stateParts[2] : (stateParts[1] ?? "");
   const appUrl = redirectBase || Deno.env.get("META_APP_URL") || "http://localhost:3001";
   const REDIRECT_URI = redirectBase ? `${redirectBase}/auth/meta/callback` : Deno.env.get("META_REDIRECT_URI")!;
-
-  console.log("[auth-callback] OAuth callback for user", userId?.slice(0, 8) + "...");
 
   if (code.endsWith("#_")) code = code.slice(0, -2);
 
