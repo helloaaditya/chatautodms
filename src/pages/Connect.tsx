@@ -162,22 +162,20 @@ export const ConnectInstagram: React.FC = () => {
         </div>
       </div>
 
-      <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-900 dark:text-amber-100">
-        <strong>Seeing someone else’s account (e.g. _pastel._eris)?</strong> Instagram only shows the account already linked in this browser. To connect <em>your</em> account and see the username/password screen:
-        <ol className="list-decimal list-inside mt-2 space-y-1">
+      <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-900 dark:text-amber-100 space-y-3">
+        <strong>Seeing the same account (e.g. _pastel._eris) on every device/browser?</strong>
+        <p>If your Meta app is in <strong>Development</strong> mode, only accounts added as <strong>Instagram Testers</strong> can connect. Add each Instagram account that should connect:</p>
+        <p className="font-medium">
+          Meta Dashboard → Your App → <strong>Roles</strong> → <strong>Instagram Testers</strong> → Add the Instagram account (they must accept the invite). Then that person logs into Instagram as that account and clicks Connect here.
+        </p>
+        <p className="text-amber-800 dark:text-amber-200/90">Same browser/device but different account?</p>
+        <ol className="list-decimal list-inside space-y-1">
           <li>Click <strong>Cancel</strong> on the Instagram screen.</li>
           <li>
-            <a
-              href="https://www.instagram.com/accounts/logout/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium underline hover:no-underline"
-            >
-              Log out of Instagram
-            </a>
-            {' '}in a new tab (or use an <strong>incognito/private window</strong> for this page).
+            <a href="https://www.instagram.com/accounts/logout/" target="_blank" rel="noopener noreferrer" className="font-medium underline hover:no-underline">Log out of Instagram</a>
+            {' '}in a new tab (or use an <strong>incognito/private window</strong>).
           </li>
-          <li>Return here and click <strong>Connect New Account</strong> again — you’ll get the login screen to enter your own Instagram.</li>
+          <li>Return here and click <strong>Connect New Account</strong> again to get the login screen.</li>
         </ol>
       </div>
 
