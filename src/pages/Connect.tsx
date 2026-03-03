@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../api/supabase';
-import { Instagram, Plus, RefreshCcw, Trash2, CheckCircle2, AlertCircle, Loader2, MessageSquare, ArrowRight, ArrowLeftRight } from 'lucide-react';
+import { Instagram, Plus, RefreshCcw, Trash2, CheckCircle2, AlertCircle, Loader2, MessageSquare, ArrowRight, ArrowLeftRight, Edit3, X } from 'lucide-react';
 import { InstagramAccount } from '../types';
 
 // Instagram API with Instagram Login (instagram.com) – no Facebook
@@ -18,6 +18,11 @@ export const ConnectInstagram: React.FC = () => {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<InstagramAccount | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPicture, setEditPicture] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const fetchAccounts = React.useCallback(async () => {
     setError(null);
@@ -145,6 +150,32 @@ export const ConnectInstagram: React.FC = () => {
   // Always use redirect flow - more reliable than FB.login when Meta restricts app
   const handleConnect = handleConnectRedirect;
 
+  const openRename = (account: InstagramAccount) => {
+    setEditingAccount(account);
+    setEditName(account.account_name || '');
+    setEditPicture(account.profile_picture || '');
+    setEditError(null);
+  };
+
+  const saveRename = async () => {
+    if (!editingAccount) return;
+    setEditError(null);
+    setSavingEdit(true);
+    const name = editName.trim() || null;
+    const picture = editPicture.trim() || null;
+    const { error: err } = await supabase
+      .from('instagram_accounts')
+      .update({ account_name: name, profile_picture: picture })
+      .eq('id', editingAccount.id);
+    setSavingEdit(false);
+    if (err) {
+      setEditError(err.message);
+      return;
+    }
+    setEditingAccount(null);
+    fetchAccounts();
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -271,49 +302,101 @@ export const ConnectInstagram: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {accounts.map((account) => (
-            <div key={account.id} className="group relative bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-xl hover:border-blue-500/50 transition-all duration-300">
-              <div className="flex items-start justify-between mb-4">
-                <div className="relative">
-                  <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-white dark:border-gray-700 shadow-md bg-gray-100">
+            <div key={account.id} className="group relative bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md hover:border-blue-500/30 transition-all duration-300">
+              <div className="flex items-start gap-4">
+                <div className="relative shrink-0">
+                  <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-700">
                     {account.profile_picture ? (
-                      <img src={account.profile_picture} alt={account.account_name} className="w-full h-full object-cover" />
+                      <img src={account.profile_picture} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <Instagram className="text-gray-400" size={24} />
+                        <Instagram className="text-gray-400" size={26} />
                       </div>
                     )}
                   </div>
-                  <div className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-800 rounded-full p-1 shadow-sm">
-                    <Instagram className="text-pink-500" size={14} />
+                  <div className="absolute -bottom-0.5 -right-0.5 bg-white dark:bg-gray-800 rounded-full p-1 shadow border border-gray-200 dark:border-gray-600">
+                    <Instagram className="text-pink-500" size={12} />
                   </div>
                 </div>
-                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
-                    <RefreshCcw size={18} />
-                  </button>
-                  <button className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors">
-                    <Trash2 size={18} />
-                  </button>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-bold text-lg truncate">{account.account_name || 'Instagram'}</h4>
+                    {(account.account_name === 'Instagram' || !account.account_name) && (
+                      <span className="text-xs px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-full">Set name</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5" title={account.instagram_business_id}>
+                    {account.instagram_business_id}
+                  </p>
+                  <div className="flex items-center gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => openRename(account)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                    >
+                      <Edit3 size={14} />
+                      Rename
+                    </button>
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg text-xs font-semibold">
+                      <CheckCircle2 size={12} />
+                      Active
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div>
-                <h4 className="font-bold text-lg truncate">{account.account_name || 'Instagram Account'}</h4>
-                <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-1 truncate">
-                  ID: {account.instagram_business_id}
-                </p>
-              </div>
-              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg text-xs font-semibold">
-                  <CheckCircle2 size={14} />
-                  <span>Active</span>
-                </div>
-                <span className="text-xs text-gray-400">
-                  {account.created_at ? new Date(account.created_at).toLocaleDateString() : ''}
-                </span>
-              </div>
+              <p className="text-xs text-gray-400 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                Connected {account.created_at ? new Date(account.created_at).toLocaleDateString() : ''}
+              </p>
             </div>
           ))}
         </div>
+
+        {/* Rename account modal */}
+        {editingAccount && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !savingEdit && setEditingAccount(null)}>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold">Rename account</h3>
+                <button type="button" onClick={() => !savingEdit && setEditingAccount(null)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
+                  <X size={20} />
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Set a display name and optional profile picture URL so you can tell accounts apart.</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Display name</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="e.g. @myhandle or Brand Account"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Profile picture URL (optional)</label>
+                  <input
+                    type="url"
+                    value={editPicture}
+                    onChange={(e) => setEditPicture(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              {editError && <p className="mt-2 text-sm text-red-500">{editError}</p>}
+              <div className="flex gap-3 mt-6">
+                <button type="button" onClick={() => !savingEdit && setEditingAccount(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                  Cancel
+                </button>
+                <button type="button" onClick={saveRename} disabled={savingEdit} className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {savingEdit ? <Loader2 size={18} className="animate-spin" /> : null}
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         </>
       )}
 
