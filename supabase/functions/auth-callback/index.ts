@@ -45,6 +45,9 @@ serve(async (req) => {
   try {
     const APP_ID = Deno.env.get("META_APP_ID")!;
     const APP_SECRET = Deno.env.get("META_APP_SECRET")!;
+    // Use Instagram App ID/Secret if set (Dashboard > Instagram > Business login); else same as Meta app
+    const IG_APP_ID = Deno.env.get("INSTAGRAM_APP_ID") || APP_ID;
+    const IG_APP_SECRET = Deno.env.get("INSTAGRAM_APP_SECRET") || APP_SECRET;
 
     if (isInstagramLogin) {
       // --- Instagram API with Instagram Login (instagram.com) ---
@@ -52,8 +55,8 @@ serve(async (req) => {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
-          client_id: APP_ID,
-          client_secret: APP_SECRET,
+          client_id: IG_APP_ID,
+          client_secret: IG_APP_SECRET,
           grant_type: "authorization_code",
           redirect_uri: REDIRECT_URI,
           code,
@@ -68,7 +71,7 @@ serve(async (req) => {
       }
 
       const longRes = await fetch(
-        `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${APP_SECRET}&access_token=${shortLivedToken}`
+        `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${IG_APP_SECRET}&access_token=${shortLivedToken}`
       );
       const longData = await longRes.json();
       const longLivedToken = longData.access_token;

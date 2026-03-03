@@ -102,10 +102,11 @@ export const ConnectInstagram: React.FC = () => {
 
   const handleConnectRedirect = () => {
     setError(null);
-    const APP_ID = import.meta.env.VITE_META_APP_ID;
+    // Use Instagram App ID if set (from App Dashboard > Instagram > Business login settings); else main Meta App ID
+    const APP_ID = import.meta.env.VITE_INSTAGRAM_APP_ID || import.meta.env.VITE_META_APP_ID;
     const REDIRECT_URI = `${window.location.origin}/auth/meta/callback`;
     if (!APP_ID) {
-      setError('App configuration missing. Contact support.');
+      setError('App configuration missing. Set VITE_META_APP_ID or VITE_INSTAGRAM_APP_ID.');
       return;
     }
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -124,9 +125,9 @@ export const ConnectInstagram: React.FC = () => {
         state,
         enable_fb_login: '0',
       });
-      const oauthUrl = `https://www.instagram.com/oauth/authorize?${oauthParams.toString()}`;
-      const loginUrl = `https://www.instagram.com/accounts/login/?force_authentication&platform_app_id=${APP_ID}&enable_fb_login=0&next=${encodeURIComponent(oauthUrl)}`;
-      window.location.href = loginUrl;
+      // Use api.instagram.com per Meta docs (www can return "Invalid platform app")
+      const authorizeUrl = `https://api.instagram.com/oauth/authorize?${oauthParams.toString()}`;
+      window.location.href = authorizeUrl;
     });
   };
 
