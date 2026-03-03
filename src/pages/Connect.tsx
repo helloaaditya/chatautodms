@@ -4,12 +4,11 @@ import { supabase } from '../api/supabase';
 import { Instagram, Plus, RefreshCcw, Trash2, CheckCircle2, AlertCircle, Loader2, MessageSquare, ArrowRight, ArrowLeftRight } from 'lucide-react';
 import { InstagramAccount } from '../types';
 
-// instagram_manage_messages requires App Review approval - add after connecting
-const INSTAGRAM_SCOPES = [
-  'public_profile',
-  'pages_show_list',
-  'pages_read_engagement',
-  'instagram_basic',
+// Instagram API with Instagram Login (instagram.com) – no Facebook
+const INSTAGRAM_OAUTH_SCOPES = [
+  'instagram_business_basic',
+  'instagram_business_manage_comments',
+  'instagram_business_manage_messages',
 ].join(',');
 
 export const ConnectInstagram: React.FC = () => {
@@ -104,7 +103,6 @@ export const ConnectInstagram: React.FC = () => {
   const handleConnectRedirect = () => {
     setError(null);
     const APP_ID = import.meta.env.VITE_META_APP_ID;
-    // Use frontend callback so we can add auth header when calling Edge Function
     const REDIRECT_URI = `${window.location.origin}/auth/meta/callback`;
     if (!APP_ID) {
       setError('App configuration missing. Contact support.');
@@ -117,9 +115,18 @@ export const ConnectInstagram: React.FC = () => {
       }
       setConnecting(true);
       const redirectBase = encodeURIComponent(window.location.origin);
-      const state = `${user.id}|${redirectBase}`;
-      const url = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${INSTAGRAM_SCOPES}&response_type=code&state=${encodeURIComponent(state)}`;
-      window.location.href = url;
+      const state = `instagram|${user.id}|${redirectBase}`;
+      const oauthParams = new URLSearchParams({
+        client_id: APP_ID,
+        redirect_uri: REDIRECT_URI,
+        response_type: 'code',
+        scope: INSTAGRAM_OAUTH_SCOPES,
+        state,
+        enable_fb_login: '0',
+      });
+      const oauthUrl = `https://www.instagram.com/oauth/authorize?${oauthParams.toString()}`;
+      const loginUrl = `https://www.instagram.com/accounts/login/?force_authentication&platform_app_id=${APP_ID}&enable_fb_login=0&next=${encodeURIComponent(oauthUrl)}`;
+      window.location.href = loginUrl;
     });
   };
 

@@ -22,8 +22,8 @@ serve(async (req) => {
   );
 
   const url = new URL(req.url);
-  const code = url.searchParams.get("code");
-  const state = url.searchParams.get("state"); // Format: userId or "userId|redirectBase"
+  let code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
 
   if (!code || !state) {
     const appUrl = Deno.env.get("META_APP_URL") || "http://localhost:3001";
@@ -33,18 +33,91 @@ serve(async (req) => {
     });
   }
 
-  const [userId, redirectBase] = state.includes("|")
-    ? state.split("|").map((s) => decodeURIComponent(s))
-    : [state, ""];
+  const stateParts = state.split("|").map((s) => decodeURIComponent(s));
+  const isInstagramLogin = stateParts[0] === "instagram";
+  const userId = isInstagramLogin ? stateParts[1] : stateParts[0];
+  const redirectBase = isInstagramLogin ? stateParts[2] : (stateParts[1] ?? "");
   const appUrl = redirectBase || Deno.env.get("META_APP_URL") || "http://localhost:3001";
+  const REDIRECT_URI = redirectBase ? `${redirectBase}/auth/meta/callback` : Deno.env.get("META_REDIRECT_URI")!;
+
+  if (code.endsWith("#_")) code = code.slice(0, -2);
 
   try {
     const APP_ID = Deno.env.get("META_APP_ID")!;
     const APP_SECRET = Deno.env.get("META_APP_SECRET")!;
-    // Must match redirect_uri used in OAuth request (frontend callback)
-    const REDIRECT_URI = redirectBase ? `${redirectBase}/auth/meta/callback` : Deno.env.get("META_REDIRECT_URI")!;
 
-    // 1. Exchange code for short-lived access token
+    if (isInstagramLogin) {
+      // --- Instagram API with Instagram Login (instagram.com) ---
+      const tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: APP_ID,
+          client_secret: APP_SECRET,
+          grant_type: "authorization_code",
+          redirect_uri: REDIRECT_URI,
+          code,
+        }),
+      });
+      const tokenData = await tokenRes.json();
+      const shortLived = Array.isArray(tokenData.data) ? tokenData.data[0] : tokenData;
+      const shortLivedToken = shortLived?.access_token ?? tokenData.access_token;
+      const igUserId = shortLived?.user_id ?? tokenData.user_id;
+      if (!shortLivedToken) {
+        throw new Error(tokenData.error_message ?? tokenData.error?.message ?? "Failed to get token from Instagram");
+      }
+
+      const longRes = await fetch(
+        `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${APP_SECRET}&access_token=${shortLivedToken}`
+      );
+      const longData = await longRes.json();
+      const longLivedToken = longData.access_token;
+      const expires_in = longData.expires_in ?? 5184000;
+      if (!longLivedToken) {
+        throw new Error(longData.error?.message ?? "Failed to get long-lived token");
+      }
+
+      const meRes = await fetch(
+        `https://graph.instagram.com/v21.0/me?fields=user_id,username,name,profile_picture_url&access_token=${longLivedToken}`
+      );
+      const meRaw = await meRes.json();
+      const meData = Array.isArray(meRaw?.data) ? meRaw.data[0] : meRaw;
+      const igId = meData?.user_id ?? igUserId ?? meRaw?.user_id ?? meRaw?.id;
+      if (!igId) throw new Error("Could not get Instagram account id");
+
+      const rpcOk = await supabase.rpc("ensure_profile_exists", { p_user_id: userId }).then(() => true).catch(() => false);
+      if (!rpcOk) {
+        const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+        const email = authUser?.user?.email ?? `${userId}@placeholder.local`;
+        const { error: profileErr } = await supabase.from("profiles").upsert({
+          id: userId,
+          email,
+          full_name: authUser?.user?.user_metadata?.full_name ?? null,
+          avatar_url: authUser?.user?.user_metadata?.avatar_url ?? null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "id", ignoreDuplicates: true });
+        if (profileErr) throw new Error("Could not create profile. Run ensure_profile_exists migration.");
+      }
+
+      const { error } = await supabase.from("instagram_accounts").upsert({
+        user_id: userId,
+        instagram_business_id: igId,
+        page_id: igId,
+        account_name: meData?.username ?? meData?.name ?? meRaw?.username ?? "Instagram",
+        profile_picture: meData?.profile_picture_url ?? meRaw?.profile_picture_url ?? null,
+        access_token: longLivedToken,
+        token_expiry: new Date(Date.now() + expires_in * 1000).toISOString(),
+        is_active: true,
+      }, { onConflict: "instagram_business_id" }).select();
+
+      if (error) throw new Error(error.message);
+      return new Response(null, {
+        status: 302,
+        headers: { ...corsHeaders, Location: `${appUrl}/connect?success=1` },
+      });
+    }
+
+    // --- Facebook Login (Pages → Instagram Business) ---
     const tokenRes = await fetch(
       `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${APP_ID}&redirect_uri=${REDIRECT_URI}&client_secret=${APP_SECRET}&code=${code}`
     );
@@ -54,7 +127,6 @@ serve(async (req) => {
       throw new Error(tokenData.error?.message ?? "Failed to get access token from Facebook");
     }
 
-    // 2. Exchange for long-lived access token (60 days)
     const longLivedRes = await fetch(
       `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${APP_ID}&client_secret=${APP_SECRET}&fb_exchange_token=${shortLivedToken}`
     );
@@ -62,11 +134,9 @@ serve(async (req) => {
     const longLivedToken = longLivedJson.access_token;
     const expires_in = longLivedJson.expires_in;
     if (!longLivedToken) {
-      const errMsg = longLivedJson.error?.message ?? "Failed to get long-lived token. Check META_APP_ID and META_APP_SECRET.";
-      throw new Error(errMsg);
+      throw new Error(longLivedJson.error?.message ?? "Failed to get long-lived token.");
     }
 
-    // 3. Fetch User's Pages
     const pagesRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${longLivedToken}`);
     const pagesData = await pagesRes.json();
     if (pagesData.error) throw new Error(pagesData.error.message ?? "Facebook API error when loading Pages.");
@@ -78,39 +148,30 @@ serve(async (req) => {
 
     let storedCount = 0;
     for (const page of pages) {
-      // 4. Fetch Instagram Business Account linked to the Page
       const igRes = await fetch(`https://graph.facebook.com/v19.0/${page.id}?fields=instagram_business_account,name,picture&access_token=${longLivedToken}`);
       const pageData = await igRes.json();
 
       if (pageData.instagram_business_account) {
         const igAccountId = pageData.instagram_business_account.id;
 
-        // 5. Ensure profile exists (required: instagram_accounts.user_id -> profiles.id)
-        const rpcOk = await supabase.rpc("ensure_profile_exists", { p_user_id: userId }).then(() => true).catch(() => false);
-        if (!rpcOk) {
-          const { data: authUser, error: authErr } = await supabase.auth.admin.getUserById(userId);
-          const email = authUser?.user?.email ?? `${userId}@placeholder.local`;
-          const { error: profileErr } = await supabase.from("profiles").upsert({
-            id: userId,
-            email,
-            full_name: authUser?.user?.user_metadata?.full_name ?? null,
-            avatar_url: authUser?.user?.user_metadata?.avatar_url ?? null,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: "id", ignoreDuplicates: true });
-          if (profileErr) {
-            console.error("[auth-callback] Profile upsert failed:", profileErr.message);
-            throw new Error("Could not create profile. In Supabase SQL Editor run: SELECT * FROM auth.users LIMIT 1; then run the migrations (ensure_profile_exists).");
-          }
-        }
+        await supabase.rpc("ensure_profile_exists", { p_user_id: userId }).then(() => true).catch(() => false);
+        const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+        const email = authUser?.user?.email ?? `${userId}@placeholder.local`;
+        await supabase.from("profiles").upsert({
+          id: userId,
+          email,
+          full_name: authUser?.user?.user_metadata?.full_name ?? null,
+          avatar_url: authUser?.user?.user_metadata?.avatar_url ?? null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "id", ignoreDuplicates: true }).catch(() => {});
 
-        // 6. Store in Database
         const { data, error } = await supabase.from("instagram_accounts").upsert({
           user_id: userId,
           instagram_business_id: igAccountId,
           page_id: page.id,
           account_name: pageData.name,
           profile_picture: pageData.picture?.data?.url,
-          access_token: longLivedToken, // Use Vault/Encryption in prod
+          access_token: longLivedToken,
           token_expiry: new Date(Date.now() + (expires_in || 5184000) * 1000).toISOString(),
           is_active: true
         }, { onConflict: 'instagram_business_id' }).select();
@@ -121,7 +182,7 @@ serve(async (req) => {
     }
 
     if (storedCount === 0) {
-      throw new Error("No Instagram Business account found. Link your Instagram to a Facebook Page first (Settings → Professional account → Connect to a Page).");
+      throw new Error("No Instagram Business account found. Link your Instagram to a Facebook Page first.");
     }
 
     return new Response(null, {
