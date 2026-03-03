@@ -10,6 +10,7 @@ import { TermsOfService } from './pages/Terms';
 import { AuthMetaCallback } from './pages/AuthMetaCallback';
 import { ConnectInstagram } from './pages/Connect';
 import { Automations } from './pages/Automations';
+import { FlowSetup } from './pages/FlowSetup';
 import { Analytics } from './pages/Analytics';
 
 const App: React.FC = () => {
@@ -66,6 +67,7 @@ const App: React.FC = () => {
       <Route path="/dashboard" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
       <Route path="/connect" element={<ProtectedRoute><ConnectInstagram /></ProtectedRoute>} />
       <Route path="/automations" element={<ProtectedRoute><Automations /></ProtectedRoute>} />
+      <Route path="/automations/new/:templateId" element={<ProtectedRoute><FlowSetup /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
       <Route path="/leads" element={<ProtectedRoute><div className="p-8">Leads Page (Coming Soon)</div></ProtectedRoute>} />
       <Route path="/billing" element={<ProtectedRoute><div className="p-8">Billing Page (Coming Soon)</div></ProtectedRoute>} />

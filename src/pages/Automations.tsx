@@ -15,11 +15,15 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { Automation } from '../types';
+import { useNavigate } from 'react-router-dom';
+import { TemplatesModal, type TemplateId } from '../components/TemplatesModal';
 
 export const Automations: React.FC = () => {
+  const navigate = useNavigate();
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [templatesOpen, setTemplatesOpen] = useState(false);
 
   const fetchAutomations = async () => {
     const { data, error } = await supabase
@@ -55,6 +59,7 @@ export const Automations: React.FC = () => {
           <p className="text-gray-500 dark:text-gray-400 mt-1">Manage and track your active automation rules.</p>
         </div>
         <button 
+          onClick={() => setTemplatesOpen(true)}
           className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/20 transition-all hover:translate-y-[-2px] active:scale-95"
         >
           <Plus size={20} />
@@ -149,6 +154,14 @@ export const Automations: React.FC = () => {
           })}
         </div>
       )}
+
+      <TemplatesModal
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        onSelectTemplate={(id: TemplateId) => {
+          navigate(`/automations/new/${id}`);
+        }}
+      />
     </div>
   );
 };

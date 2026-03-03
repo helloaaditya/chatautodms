@@ -1,0 +1,222 @@
+import React, { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, ShuffleCw, Plus, ImageUp, Play } from 'lucide-react';
+import { TEMPLATES, type TemplateId } from '../components/TemplatesModal';
+
+const MAX_MESSAGE_LENGTH = 1000;
+
+export const FlowSetup: React.FC = () => {
+  const { templateId } = useParams<{ templateId: string }>();
+  const navigate = useNavigate();
+  const template = TEMPLATES.find((t) => t.id === (templateId as TemplateId));
+
+  const [postMode, setPostMode] = useState<'specific' | 'next'>('specific');
+  const [anyKeyword, setAnyKeyword] = useState(true);
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [keywordInput, setKeywordInput] = useState('');
+  const [message, setMessage] = useState('');
+  const [openingMessage, setOpeningMessage] = useState(false);
+  const [publicReply, setPublicReply] = useState(false);
+  const [askToFollow, setAskToFollow] = useState(false);
+  const [followUp, setFollowUp] = useState(false);
+
+  const addKeyword = () => {
+    const k = keywordInput.trim();
+    if (k && !keywords.includes(k)) {
+      setKeywords([...keywords, k]);
+      setKeywordInput('');
+    }
+  };
+
+  const removeKeyword = (k: string) => {
+    setKeywords(keywords.filter((x) => x !== k));
+  };
+
+  const handleGoLive = () => {
+    // TODO: save automation and go live
+    navigate('/automations');
+  };
+
+  if (!template) {
+    return (
+      <div className="p-8">
+        <button onClick={() => navigate('/automations')} className="text-blue-600 hover:underline flex items-center gap-2">
+          <ArrowLeft size={18} /> Back to Automations
+        </button>
+        <p className="mt-4 text-gray-500">Template not found.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-[calc(100vh-4rem)]">
+      {/* Preview */}
+      <div className="flex-1 flex flex-col items-center justify-start pt-8 pb-8 pl-8 pr-4 border-r border-gray-200 dark:border-gray-700 overflow-auto">
+        <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-4 w-full">Preview:</h3>
+        <div className="bg-gray-100 dark:bg-gray-800 rounded-[2.5rem] p-3 shadow-xl border border-gray-200 dark:border-gray-600">
+          <div className="w-[280px] bg-white dark:bg-gray-900 rounded-[2rem] overflow-hidden border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+              <span className="text-gray-400">←</span>
+              <span className="font-semibold text-sm">Posts</span>
+              <span className="text-gray-400">⋯</span>
+            </div>
+            <div className="p-2">
+              <div className="flex items-center gap-2 pb-2">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500" />
+                <span className="text-xs font-semibold">@_.pastel_eris</span>
+              </div>
+              <div className="aspect-square bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                <p className="text-gray-500 dark:text-gray-400 text-sm text-center px-4">You haven&apos;t picked a post yet</p>
+              </div>
+              <div className="flex gap-6 pt-2 pb-2">
+                <span className="text-gray-400">♡</span>
+                <span className="text-gray-400">💬</span>
+                <span className="text-gray-400">✈</span>
+                <span className="text-gray-400">🔖</span>
+              </div>
+            </div>
+            <div className="h-12 flex items-center justify-around border-t border-gray-100 dark:border-gray-800 text-gray-400">
+              <span>⌂</span><span>🔍</span><span>+</span><span>▶</span><span>👤</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Setup panel */}
+      <div className="w-[420px] flex-shrink-0 overflow-y-auto bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 p-6">
+        <button
+          onClick={() => navigate('/automations')}
+          className="flex items-center gap-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 text-sm mb-6"
+        >
+          <ArrowLeft size={16} /> Back
+        </button>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Setup {template.title}</h1>
+
+        {/* 1 Select a Post */}
+        <section className="mb-8">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">1 Select a Post</h2>
+          <div className="space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="radio" name="postMode" checked={postMode === 'specific'} onChange={() => setPostMode('specific')} className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500" />
+              <span className="text-sm font-medium">Specific Post</span>
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">Select from existing posts</p>
+            <label className="flex items-center gap-3 cursor-pointer mt-2">
+              <input type="radio" name="postMode" checked={postMode === 'next'} onChange={() => setPostMode('next')} className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500" />
+              <span className="text-sm font-medium">Next Post</span>
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">Activate on your next post</p>
+          </div>
+          {postMode === 'specific' && (
+            <div className="mt-4">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Choose a Post:</p>
+              <div className="flex gap-2 flex-wrap">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="w-20 h-20 rounded-lg bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+                ))}
+              </div>
+              <button type="button" className="mt-2 text-sm text-blue-600 dark:text-blue-400 font-medium hover:underline">Show More</button>
+            </div>
+          )}
+        </section>
+
+        {/* 2 Add Keywords */}
+        <section className="mb-8">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">2 Add Keywords</h2>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <span className="text-sm text-gray-700 dark:text-gray-300">Any keyword</span>
+            <button type="button" role="switch" aria-checked={anyKeyword} onClick={() => setAnyKeyword(!anyKeyword)} className={`w-10 h-6 rounded-full transition-colors ${anyKeyword ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+              <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${anyKeyword ? 'translate-x-5' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Type keyword..."
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addKeyword()}
+              className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+            <button type="button" onClick={addKeyword} className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50">
+              <Plus size={18} />
+            </button>
+          </div>
+          {keywords.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {keywords.map((k) => (
+                <span key={k} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-sm">
+                  {k}
+                  <button type="button" onClick={() => removeKeyword(k)} className="text-gray-500 hover:text-red-500">×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* 3 Send DM Message */}
+        <section className="mb-8">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">3 Send DM Message</h2>
+          <div className="relative">
+            <div className="absolute top-2 right-2 z-10">
+              <button type="button" className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+                <ShuffleCw size={14} /> Shuffle
+              </button>
+            </div>
+            <textarea
+              placeholder="Enter your message here..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value.slice(0, MAX_MESSAGE_LENGTH))}
+              rows={5}
+              className="w-full px-3 py-3 pr-24 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+            />
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{message.length}/{MAX_MESSAGE_LENGTH}</p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
+              <Plus size={16} /> Add Link
+            </button>
+          </div>
+          <div className="mt-3 border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-xl p-6 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors cursor-pointer">
+            <ImageUp className="mx-auto text-gray-400 dark:text-gray-500 mb-2" size={28} />
+            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Upload Image</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">PNG, JPG, GIF up to 5MB</p>
+          </div>
+          <div className="flex items-center justify-between mt-4">
+            <span className="text-sm text-gray-700 dark:text-gray-300">Opening message</span>
+            <button type="button" role="switch" aria-checked={openingMessage} onClick={() => setOpeningMessage(!openingMessage)} className={`w-10 h-6 rounded-full transition-colors ${openingMessage ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+              <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${openingMessage ? 'translate-x-5' : 'translate-x-1'}`} />
+            </button>
+          </div>
+        </section>
+
+        {/* 4 Advanced Automations */}
+        <section className="mb-8">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-1">4 Advanced Automations</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Smart engagement automations</p>
+          <div className="space-y-4">
+            {[
+              { label: 'Publicly reply to comments', value: publicReply, set: setPublicReply },
+              { label: 'Ask to follow before sending DM', value: askToFollow, set: setAskToFollow },
+              { label: 'Send follow-up message', value: followUp, set: setFollowUp },
+            ].map(({ label, value, set }) => (
+              <div key={label} className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+                <button type="button" role="switch" aria-checked={value} onClick={() => set(!value)} className={`w-10 h-6 rounded-full transition-colors ${value ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                  <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${value ? 'translate-x-5' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <button
+          onClick={handleGoLive}
+          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold shadow-lg shadow-green-500/20 transition-all"
+        >
+          <Play size={20} fill="currentColor" /> GO LIVE
+        </button>
+      </div>
+    </div>
+  );
+};

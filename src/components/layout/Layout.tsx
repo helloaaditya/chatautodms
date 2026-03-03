@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { useNavigate, NavLink, Link } from 'react-router-dom';
+import { useNavigate, NavLink, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../../api/supabase';
 import { 
   LayoutDashboard, 
@@ -30,7 +30,9 @@ const sidebarLinks = [
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = React.useState<any>(null);
+  const isFlowSetup = location.pathname.startsWith('/automations/new');
 
   React.useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -111,7 +113,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
              </div>
           </div>
         </header>
-        <div className="p-8 max-w-7xl mx-auto">
+        <div className={isFlowSetup ? 'min-h-full' : 'p-8 max-w-7xl mx-auto'}>
           {children}
         </div>
       </main>
