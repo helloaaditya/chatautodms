@@ -49,11 +49,13 @@ serve(async (req) => {
           for (const change of entry.changes) {
             if (change.field === "comments") {
               const commentId = change.value.id;
-              const commentText = change.value.text;
-              const senderId = change.value.from.id;
+              const commentText = change.value.text ?? "";
+              const senderId = change.value.from?.id;
+              const mediaId = change.value.media?.id ?? change.value.original_media_id ?? null;
 
-              // Trigger Automation Engine for Comments
-              await triggerAutomation(supabase, igAccountId, senderId, commentText, "comment", commentId);
+              if (senderId) {
+                await triggerAutomation(supabase, igAccountId, senderId, commentText, "comment", { commentId, mediaId });
+              }
             }
           }
         }
@@ -65,43 +67,104 @@ serve(async (req) => {
   return new Response("Not allowed", { status: 405 });
 });
 
-async function triggerAutomation(supabase: any, igAccountId: string, senderId: string, text: string, type: "dm" | "comment", commentId?: string) {
-  // Call internal automation engine function
-  // In production, use a Queue/Background job
+type CommentPayload = { commentId: string; mediaId: string | null };
+
+async function triggerAutomation(
+  supabase: any,
+  igBusinessId: string,
+  senderId: string,
+  text: string,
+  type: "dm" | "comment",
+  commentPayload?: CommentPayload
+) {
+  // Resolve Instagram business id (from Meta) to our account row UUID
+  const { data: accountRow } = await supabase
+    .from("instagram_accounts")
+    .select("id, access_token, instagram_business_id")
+    .eq("instagram_business_id", igBusinessId)
+    .eq("is_active", true)
+    .single();
+
+  if (!accountRow) return;
+
+  const accountUuid = accountRow.id;
+
   const { data: automations } = await supabase
     .from("automations")
     .select("*, flows(*)")
-    .eq("instagram_account_id", igAccountId)
+    .eq("instagram_account_id", accountUuid)
     .eq("trigger_type", type)
     .eq("is_active", true);
 
-  if (automations && automations.length > 0) {
-    // Basic Keyword Matching
-    for (const automation of automations) {
-      const keywords = automation.trigger_keywords || [];
-      const isMatch = keywords.some((kw: string) => text.toLowerCase().includes(kw.toLowerCase()));
+  if (!automations?.length) return;
 
-      if (isMatch) {
-        // Execute Flow
-        await executeFlow(supabase, automation.flows[0], senderId, commentId);
+  const commentId = commentPayload?.commentId;
+  const mediaId = commentPayload?.mediaId ?? null;
+
+  for (const automation of automations) {
+    const keywords = automation.trigger_keywords || [];
+    const config = automation.config ?? {};
+
+    // Keyword match: empty array = "any keyword" (match all)
+    const isKeywordMatch = keywords.length === 0 || keywords.some((kw: string) => text.toLowerCase().includes(String(kw).toLowerCase()));
+
+    // For comments: optional post filter (Specific Post)
+    const selectedPostId = config.selectedPostId ?? config.selected_media_id;
+    const isPostMatch = !selectedPostId || (mediaId && String(selectedPostId) === String(mediaId));
+
+    if (!isKeywordMatch || !isPostMatch) continue;
+
+    const messageText = config.message ?? "";
+
+    if (type === "comment" && commentId && messageText.trim()) {
+      const sent = await sendPrivateReply(accountRow.instagram_business_id, accountRow.access_token, commentId, messageText.trim());
+      if (sent) {
+        await supabase.from("analytics").insert({
+          instagram_account_id: accountUuid,
+          automation_id: automation.id,
+          event_type: "message_sent"
+        }).catch(() => {});
       }
+      continue;
+    }
+
+    if (automation.flows?.[0]) {
+      await executeFlow(supabase, automation.flows[0], senderId, commentId, accountUuid);
     }
   }
 }
 
-async function executeFlow(supabase: any, flow: any, senderId: string, commentId?: string) {
-  // Simplified flow executor
-  // 1. Log analytics
+async function sendPrivateReply(igBusinessId: string, accessToken: string, commentId: string, text: string): Promise<boolean> {
+  try {
+    const res = await fetch(`https://graph.instagram.com/v21.0/${igBusinessId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${accessToken}` },
+      body: JSON.stringify({
+        recipient: { comment_id: commentId },
+        message: { text }
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("[webhook] Private reply failed:", res.status, err);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("[webhook] Private reply error:", e);
+    return false;
+  }
+}
+
+async function executeFlow(supabase: any, flow: any, senderId: string, commentId?: string, instagramAccountId?: string) {
   await supabase.from("analytics").insert({
-    instagram_account_id: flow.instagram_account_id,
+    instagram_account_id: instagramAccountId ?? flow.instagram_account_id,
     automation_id: flow.automation_id,
     event_type: "automation_triggered"
-  });
+  }).catch(() => {});
 
-  // 2. Fetch the start node and send a message
-  // In a real system, you'd traverse the flow nodes
-  const startNode = flow.nodes.find((n: any) => n.type === "start");
+  const startNode = flow.nodes?.find((n: any) => n.type === "start");
   if (startNode) {
-     // Trigger actual Meta API to send message (handled in automation service)
+    // Flow execution can be extended here
   }
 }
