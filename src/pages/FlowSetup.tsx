@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Shuffle, Plus, ImageUp, Play, Loader2 } from 'lucide-react';
+import { ArrowLeft, Shuffle, Plus, ImageUp, Play, Loader2, Instagram } from 'lucide-react';
 import { TEMPLATES, type TemplateId } from '../components/TemplatesModal';
 import { supabase } from '../api/supabase';
+import type { InstagramAccount } from '../types';
 
 const MAX_MESSAGE_LENGTH = 1000;
 
@@ -24,6 +25,8 @@ export const FlowSetup: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const template = loadedTemplate ?? templateFromNew;
 
+  const [accounts, setAccounts] = useState<InstagramAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [postMode, setPostMode] = useState<'specific' | 'next'>('specific');
   const [loadingEdit, setLoadingEdit] = useState(!!automationId);
   const [posts, setPosts] = useState<InstagramPost[]>([]);
@@ -49,24 +52,45 @@ export const FlowSetup: React.FC = () => {
     dm_auto_responder: 'dm',
   };
 
+  const fetchAccounts = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      setAccounts([]);
+      setHasAccount(false);
+      return;
+    }
+    try {
+      const res = await fetch('/api/instagram-accounts', {
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json().catch(() => null);
+      const list = Array.isArray(data) ? data : [];
+      setAccounts(list);
+      setHasAccount(list.length > 0);
+    } catch {
+      setAccounts([]);
+      setHasAccount(false);
+    }
+  }, []);
+
   const fetchPosts = useCallback(async () => {
+    if (!selectedAccountId) return;
     setPostsLoading(true);
     setPostsError(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
-        setHasAccount(false);
         setPosts([]);
         return;
       }
-      const res = await fetch('/api/instagram-media', {
+      const res = await fetch(`/api/instagram-media?accountId=${encodeURIComponent(selectedAccountId)}`, {
         credentials: 'include',
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       const json = await res.json().catch(() => ({}));
       const list = Array.isArray(json?.data) ? json.data : [];
       setPosts(list);
-      setHasAccount(true);
       if (!res.ok && json?.error) setPostsError(json.error);
     } catch (e) {
       setPostsError(e instanceof Error ? e.message : 'Failed to load posts');
@@ -74,15 +98,15 @@ export const FlowSetup: React.FC = () => {
     } finally {
       setPostsLoading(false);
     }
-  }, []);
+  }, [selectedAccountId]);
 
   useEffect(() => {
-    const checkAccount = async () => {
-      const { data } = await supabase.from('instagram_accounts').select('id').limit(1);
-      setHasAccount(Array.isArray(data) && data.length > 0);
-    };
-    checkAccount();
-  }, []);
+    fetchAccounts();
+  }, [fetchAccounts]);
+
+  useEffect(() => {
+    if (accounts.length > 0 && !selectedAccountId) setSelectedAccountId(accounts[0].id);
+  }, [accounts, selectedAccountId]);
 
   // Load existing automation when editing
   useEffect(() => {
@@ -95,7 +119,7 @@ export const FlowSetup: React.FC = () => {
       setLoadError(null);
       const { data, error } = await supabase
         .from('automations')
-        .select('id, name, trigger_type, trigger_keywords, config')
+        .select('id, name, trigger_type, trigger_keywords, config, instagram_account_id')
         .eq('id', automationId)
         .single();
       if (cancelled) return;
@@ -105,6 +129,7 @@ export const FlowSetup: React.FC = () => {
         return;
       }
       setEditId(data.id);
+      if (data.instagram_account_id) setSelectedAccountId(data.instagram_account_id);
       const cfg = (data.config as Record<string, unknown>) ?? {};
       const tid = (cfg.templateId as string) ?? 'comment_to_dm';
       setLoadedTemplate(TEMPLATES.find((t) => t.id === (tid as TemplateId)) ?? TEMPLATES[0]);
@@ -124,13 +149,13 @@ export const FlowSetup: React.FC = () => {
   }, [automationId]);
 
   useEffect(() => {
-    if (postMode === 'specific' && hasAccount) {
+    if (postMode === 'specific' && selectedAccountId) {
       fetchPosts();
     } else if (postMode === 'next') {
       setPosts([]);
       setSelectedPostId(null);
     }
-  }, [postMode, hasAccount, fetchPosts]);
+  }, [postMode, selectedAccountId, fetchPosts]);
 
   const addKeyword = () => {
     const k = keywordInput.trim();
@@ -154,15 +179,9 @@ export const FlowSetup: React.FC = () => {
         setSaveError('Please sign in again.');
         return;
       }
-      const { data: accounts } = await supabase
-        .from('instagram_accounts')
-        .select('id')
-        .eq('is_active', true)
-        .limit(1)
-        .order('created_at', { ascending: false });
-      const instagramAccountId = accounts?.[0]?.id;
+      const instagramAccountId = selectedAccountId || (accounts.length > 0 ? accounts[0].id : null);
       if (!instagramAccountId && !editId) {
-        setSaveError('Connect an Instagram account first.');
+        setSaveError('Select an Instagram account above.');
         return;
       }
       const triggerType = templateToTriggerType[template.id] ?? 'comment';
@@ -184,7 +203,7 @@ export const FlowSetup: React.FC = () => {
         trigger_keywords: keywords.length > 0 ? keywords : [],
         is_active: true,
         config,
-        ...(instagramAccountId && !editId ? { instagram_account_id: instagramAccountId } : {}),
+        ...(instagramAccountId ? { instagram_account_id: instagramAccountId } : {}),
       };
       const res = await fetch('/api/save-automation', {
         method: 'POST',
@@ -278,9 +297,44 @@ export const FlowSetup: React.FC = () => {
         </button>
         <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Setup {template.title}</h1>
 
-        {/* 1 Select a Post */}
+        {/* 0 Choose Instagram account */}
         <section className="mb-8">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">1 Select a Post</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">1 Choose Instagram account</h2>
+          {accounts.length === 0 && (
+            <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
+              Connect an Instagram account first from <button type="button" onClick={() => navigate('/connect')} className="underline font-medium">Connect</button>.
+            </p>
+          )}
+          {accounts.length > 0 && (
+            <div className="space-y-2">
+              {accounts.map((acc) => {
+                const isSelected = selectedAccountId === acc.id;
+                return (
+                  <button
+                    key={acc.id}
+                    type="button"
+                    onClick={() => setSelectedAccountId(acc.id)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${isSelected ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-500' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 bg-white dark:bg-gray-800'}`}
+                  >
+                    {acc.profile_picture ? (
+                      <img src={acc.profile_picture} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center flex-shrink-0">
+                        <Instagram size={20} className="text-gray-500 dark:text-gray-400" />
+                      </div>
+                    )}
+                    <span className="font-medium text-gray-900 dark:text-white truncate">{acc.account_name || 'Instagram account'}</span>
+                    {isSelected && <span className="ml-auto text-blue-600 dark:text-blue-400 text-xs font-medium">Selected</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* 2 Select a Post */}
+        <section className="mb-8">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">2 Select a Post</h2>
           <div className="space-y-3">
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="radio" name="postMode" checked={postMode === 'specific'} onChange={() => setPostMode('specific')} className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500" />
@@ -297,20 +351,23 @@ export const FlowSetup: React.FC = () => {
             <div className="mt-4">
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Choose a Post:</p>
               {hasAccount === false && (
-                <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">Connect an Instagram account first from Instagram Accounts.</p>
+                <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">Connect an Instagram account first from Connect.</p>
               )}
-              {hasAccount === true && postsLoading && (
+              {hasAccount === true && !selectedAccountId && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 py-2">Select an Instagram account above.</p>
+              )}
+              {hasAccount === true && selectedAccountId && postsLoading && (
                 <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 py-4">
                   <Loader2 size={18} className="animate-spin" /> Loading posts…
                 </div>
               )}
-              {hasAccount === true && !postsLoading && postsError && (
+              {hasAccount === true && selectedAccountId && !postsLoading && postsError && (
                 <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{postsError}</p>
               )}
-              {hasAccount === true && !postsLoading && !postsError && posts.length === 0 && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 py-4">No posts found. Post something on Instagram and try again.</p>
+              {hasAccount === true && selectedAccountId && !postsLoading && !postsError && posts.length === 0 && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 py-4">No posts found for this account. Post something on Instagram and try again.</p>
               )}
-              {hasAccount === true && !postsLoading && posts.length > 0 && (
+              {hasAccount === true && selectedAccountId && !postsLoading && posts.length > 0 && (
                 <>
                   <div className="flex gap-2 flex-wrap">
                     {posts.map((post) => {
@@ -339,9 +396,9 @@ export const FlowSetup: React.FC = () => {
           )}
         </section>
 
-        {/* 2 Add Keywords */}
+        {/* 3 Add Keywords */}
         <section className="mb-8">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">2 Add Keywords</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">3 Add Keywords</h2>
           <div className="flex items-center justify-between gap-2 mb-3">
             <span className="text-sm text-gray-700 dark:text-gray-300">Any keyword</span>
             <button type="button" role="switch" aria-checked={anyKeyword} onClick={() => setAnyKeyword(!anyKeyword)} className={`w-10 h-6 rounded-full transition-colors ${anyKeyword ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
@@ -373,9 +430,9 @@ export const FlowSetup: React.FC = () => {
           )}
         </section>
 
-        {/* 3 Send DM Message */}
+        {/* 4 Send DM Message */}
         <section className="mb-8">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">3 Send DM Message</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">4 Send DM Message</h2>
           <div className="relative">
             <div className="absolute top-2 right-2 z-10">
               <button type="button" className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">

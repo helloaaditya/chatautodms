@@ -72,7 +72,7 @@ export default async function handler(req: VercelReq, res: VercelRes) {
 
   let body: AutomationPayload;
   try {
-    body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body as AutomationPayload);
+    body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body as unknown) as AutomationPayload;
   } catch {
     return res.status(400).json({ error: 'Invalid JSON body' });
   }
@@ -83,14 +83,18 @@ export default async function handler(req: VercelReq, res: VercelRes) {
   const isUpdate = Boolean(body.id);
 
   if (isUpdate) {
+    const updatePayload: Record<string, unknown> = {
+      trigger_type: body.trigger_type,
+      trigger_keywords: body.trigger_keywords ?? [],
+      config: body.config ?? {},
+      is_active: body.is_active ?? true,
+    };
+    if (body.instagram_account_id) {
+      updatePayload.instagram_account_id = body.instagram_account_id;
+    }
     const { data, error } = await supabase
       .from('automations')
-      .update({
-        trigger_type: body.trigger_type,
-        trigger_keywords: body.trigger_keywords ?? [],
-        config: body.config ?? {},
-        is_active: body.is_active ?? true,
-      })
+      .update(updatePayload)
       .eq('id', body.id)
       .eq('user_id', userId)
       .select('id')

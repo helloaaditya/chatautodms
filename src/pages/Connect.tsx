@@ -203,17 +203,6 @@ export const ConnectInstagram: React.FC = () => {
         </div>
       </div>
 
-      <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-900 dark:text-amber-100 space-y-3">
-        <strong>Seeing the same account (e.g. _pastel._eris) on every device/browser?</strong>
-        <p>Instagram shows whichever account is <strong>logged in on that device or browser</strong>. So even in Live mode, if that device has _pastel._eris logged in, you’ll see that account.</p>
-        <p className="font-medium">To connect a different account:</p>
-        <ol className="list-decimal list-inside space-y-1">
-          <li>On the device/browser where you want to connect: click <strong>Cancel</strong> on the Instagram screen, then <a href="https://www.instagram.com/accounts/logout/" target="_blank" rel="noopener noreferrer" className="font-medium underline hover:no-underline">log out of Instagram</a> (or use a browser/incognito where you’re not logged in).</li>
-          <li>Return here and click <strong>Connect New Account</strong>. You’ll get the Instagram <strong>login</strong> screen — enter the username and password of the account you want to connect.</li>
-        </ol>
-        <p className="text-amber-800 dark:text-amber-200/90 text-xs mt-2">In Development mode, only Instagram Testers can connect — add them in Meta → Roles → Instagram Testers.</p>
-      </div>
-
       {error && (
         <div className="space-y-3">
           <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 text-sm font-medium">
@@ -258,9 +247,6 @@ export const ConnectInstagram: React.FC = () => {
               </button>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
                 Log in with Instagram and set your permissions. Once that&apos;s done, you&apos;re all set to connect to ChatAutoDM!
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                If it shows another account (e.g. _pastel._eris), click Cancel, log out of Instagram, then try Connect again to see the login screen.
               </p>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-6">
                 By continuing, you agree to our <a href="/terms" className="underline hover:text-gray-600">Terms of Service</a> and <a href="/privacy" className="underline hover:text-gray-600">Privacy Policy</a>.
