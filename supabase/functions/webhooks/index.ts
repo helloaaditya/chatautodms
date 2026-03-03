@@ -1,5 +1,9 @@
+// @ts-expect-error Deno resolves URL imports at runtime
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+// @ts-expect-error Deno resolves URL imports at runtime
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+
+declare const Deno: { env: { get(key: string): string | undefined } };
 
 const WEBHOOK_VERIFY_TOKEN = (Deno.env.get("WEBHOOK_VERIFY_TOKEN") ?? "").trim();
 
@@ -49,7 +53,7 @@ serve(async (req) => {
     const obj = body.object;
     const hasEntry = Array.isArray(body.entry);
     if (obj !== "instagram" || !hasEntry) {
-      console.log("[webhook] Ignoring payload – object:", obj, "entries:", hasEntry ? body.entry?.length : 0);
+      console.log("[webhook] Ignoring payload – object:", obj, "entries:", Array.isArray(body.entry) ? body.entry.length : 0);
     }
 
     if (body.object === "instagram" && Array.isArray(body.entry)) {
@@ -185,7 +189,7 @@ async function triggerAutomation(
     }
 
     if (automation.flows?.[0]) {
-      await executeFlow(supabase, automation.flows[0], senderId, commentId, accountUuid);
+      await executeFlow(supabase, automation.flows[0], senderId, commentId ?? undefined, accountUuid);
     }
   }
 }
