@@ -23,7 +23,7 @@ export const ConnectInstagram: React.FC = () => {
     setError(null);
     const { data: { session } } = await supabase.auth.getSession();
     let list: InstagramAccount[] = [];
-    // 1) API (service role) – often sees new rows immediately after OAuth
+    // 1) API (service role) – sees all rows for this user, often before RLS/replication
     if (session?.access_token) {
       try {
         const res = await fetch('/api/instagram-accounts', {
@@ -37,10 +37,18 @@ export const ConnectInstagram: React.FC = () => {
         /* ignore */
       }
     }
-    // 2) Supabase (RLS) – use if it has data, else keep API result (avoids overwriting with empty after redirect)
+    // 2) Supabase (RLS) – merge with API result so we never drop a newly added account
     const { data: supabaseData, error: supabaseError } = await supabase.from('instagram_accounts').select('*');
     if (supabaseError) setError(supabaseError.message);
-    if (supabaseData?.length) list = supabaseData;
+    if (Array.isArray(supabaseData) && supabaseData.length > 0) {
+      const seen = new Set(list.map((a) => a.id));
+      for (const row of supabaseData) {
+        if (!seen.has(row.id)) {
+          list = [...list, row];
+          seen.add(row.id);
+        }
+      }
+    }
     setAccounts(list);
     setLoading(false);
   }, []);
@@ -81,9 +89,11 @@ export const ConnectInstagram: React.FC = () => {
       setError(null);
       setLoading(true);
       fetchAccounts();
-      // Aggressive retries after OAuth (DB can be delayed)
+      // Retry several times so new account from OAuth is visible (DB/API can be delayed)
       const timers: ReturnType<typeof setTimeout>[] = [];
-      [1, 2, 4, 6, 10].forEach((sec, i) => timers.push(setTimeout(() => fetchAccounts(), sec * 1000)));
+      [0.5, 1, 2, 4, 6, 10, 15].forEach((sec) =>
+        timers.push(setTimeout(() => fetchAccounts(), sec * 1000))
+      );
       return () => timers.forEach(clearTimeout);
     }
     if (errorParam) {

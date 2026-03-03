@@ -97,7 +97,10 @@ serve(async (req) => {
         `https://graph.instagram.com/v21.0/me?fields=id,user_id,username,name,profile_picture_url&access_token=${longLivedToken}`
       );
       const meRaw = await meRes.json();
-      if (meRaw?.error) throw new Error(meRaw.error.message ?? "Instagram API error");
+      if (meRaw?.error) {
+        console.error("[auth-callback] /me failed:", meRaw.error.message, "code:", meRaw.error?.code);
+        throw new Error(meRaw.error.message ?? "Instagram API error");
+      }
       const meData = Array.isArray(meRaw?.data) ? meRaw.data[0] : meRaw;
       const igId = meData?.id ?? meData?.user_id ?? igUserId ?? meRaw?.id ?? meRaw?.user_id;
       if (!igId) {
