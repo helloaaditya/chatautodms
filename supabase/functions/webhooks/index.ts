@@ -107,25 +107,41 @@ async function triggerAutomation(
   commentPayload?: CommentPayload
 ) {
   // Resolve Instagram business id (from Meta) to our account row UUID
-  const { data: accountRow } = await supabase
+  const { data: accountRow, error: accountError } = await supabase
     .from("instagram_accounts")
     .select("id, access_token, instagram_business_id")
     .eq("instagram_business_id", igBusinessId)
     .eq("is_active", true)
     .single();
 
-  if (!accountRow) return;
+  if (accountError) {
+    console.log("[webhook] account lookup error", { igBusinessId, error: accountError.message });
+    return;
+  }
+  if (!accountRow) {
+    console.log("[webhook] no account found for ig id", igBusinessId);
+    return;
+  }
 
   const accountUuid = accountRow.id;
+  console.log("[webhook] account resolved", { accountUuid, type });
 
-  const { data: automations } = await supabase
+  const { data: automations, error: autoError } = await supabase
     .from("automations")
     .select("id, user_id, trigger_keywords, config, flows(*)")
     .eq("instagram_account_id", accountUuid)
     .eq("trigger_type", type)
     .eq("is_active", true);
 
-  if (!automations?.length) return;
+  if (autoError) {
+    console.log("[webhook] automations fetch error", { error: autoError.message });
+    return;
+  }
+  if (!automations?.length) {
+    console.log("[webhook] no automations for this account", { accountUuid, type });
+    return;
+  }
+  console.log("[webhook] automations to check", automations.length);
 
   const commentId = commentPayload?.commentId ?? null;
   const mediaId = commentPayload?.mediaId ?? null;
@@ -163,7 +179,12 @@ async function triggerAutomation(
 
     const messageText = (config.message as string) ?? "";
 
-    if (type === "comment" && commentId && String(messageText).trim()) {
+    if (type === "comment" && commentId) {
+      if (!String(messageText).trim()) {
+        console.log("[webhook] skip automation (no message in config)", { automationId: automation.id });
+        continue;
+      }
+      console.log("[webhook] sending private reply", { automationId: automation.id, commentId });
       const sent = await sendPrivateReply(
         accountRow.instagram_business_id,
         accountRow.access_token,
@@ -171,6 +192,7 @@ async function triggerAutomation(
         String(messageText).trim()
       );
       if (sent) {
+        console.log("[webhook] private reply sent");
         await supabase
           .from("analytics")
           .insert({
@@ -191,18 +213,32 @@ async function triggerAutomation(
 }
 
 async function sendPrivateReply(igBusinessId: string, accessToken: string, commentId: string, text: string): Promise<boolean> {
+  const url = (host: string) => `${host}/v21.0/${igBusinessId}/messages`;
+  const body = JSON.stringify({
+    recipient: { comment_id: commentId },
+    message: { text }
+  });
+  const opts = {
+    method: "POST" as const,
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${accessToken}` },
+    body
+  };
+
+  const tryHost = async (host: string): Promise<{ ok: boolean; status: number; err?: unknown }> => {
+    const res = await fetch(url(host), opts);
+    const err = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, status: res.status, err };
+    return { ok: true, status: res.status };
+  };
+
   try {
-    const res = await fetch(`https://graph.instagram.com/v21.0/${igBusinessId}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${accessToken}` },
-      body: JSON.stringify({
-        recipient: { comment_id: commentId },
-        message: { text }
-      })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error("[webhook] Private reply failed:", res.status, err);
+    let result = await tryHost("https://graph.instagram.com");
+    if (!result.ok && result.err && String((result.err as any)?.error?.message || "").includes("method type")) {
+      console.log("[webhook] retrying private reply on graph.facebook.com");
+      result = await tryHost("https://graph.facebook.com");
+    }
+    if (!result.ok) {
+      console.error("[webhook] Private reply failed:", result.status, result.err);
       return false;
     }
     return true;
