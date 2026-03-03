@@ -97,19 +97,30 @@ serve(async (req) => {
         `https://graph.instagram.com/v21.0/me?fields=id,user_id,username,name,profile_picture_url&access_token=${longLivedToken}`
       );
       const meRaw = await meRes.json();
+      let igId: string | null = null;
+      let accountName = "Instagram";
+      let profilePicture: string | null = null;
+
       if (meRaw?.error) {
-        console.error("[auth-callback] /me failed:", meRaw.error.message, "code:", meRaw.error?.code);
-        throw new Error(meRaw.error.message ?? "Instagram API error");
+        console.warn("[auth-callback] /me failed:", meRaw.error.message, "- using user_id from token response");
+        if (!igUserId) throw new Error(meRaw.error.message ?? "Instagram API error");
+        igId = String(igUserId);
+      } else {
+        const meData = Array.isArray(meRaw?.data) ? meRaw.data[0] : meRaw;
+        igId = meData?.id ?? meData?.user_id ?? igUserId ?? meRaw?.id ?? meRaw?.user_id ?? null;
+        if (igId) {
+          accountName = meData?.username ?? meData?.name ?? meRaw?.username ?? meRaw?.name ?? "Instagram";
+          profilePicture = meData?.profile_picture_url ?? meRaw?.profile_picture_url ?? null;
+        }
       }
-      const meData = Array.isArray(meRaw?.data) ? meRaw.data[0] : meRaw;
-      const igId = meData?.id ?? meData?.user_id ?? igUserId ?? meRaw?.id ?? meRaw?.user_id;
+
       if (!igId) {
-        console.error("[auth-callback] /me response missing id:", JSON.stringify(meRaw).slice(0, 300));
+        console.error("[auth-callback] No Instagram id from /me or token:", JSON.stringify(meRaw).slice(0, 200));
         throw new Error("Could not get Instagram account id");
       }
       console.log("[auth-callback] Got igId:", String(igId).slice(0, 15) + "...");
 
-      const accountName = meData?.username ?? meData?.name ?? meRaw?.username ?? meRaw?.name ?? "Instagram";
+      accountName = accountName || "Instagram";
       const tokenExpiry = new Date(Date.now() + expires_in * 1000).toISOString();
 
       // Save in one transaction via RPC (ensures profile exists + upserts instagram_accounts)
@@ -118,7 +129,7 @@ serve(async (req) => {
         p_instagram_business_id: String(igId),
         p_page_id: String(igId),
         p_account_name: accountName,
-        p_profile_picture: meData?.profile_picture_url ?? meRaw?.profile_picture_url ?? null,
+        p_profile_picture: profilePicture,
         p_access_token: longLivedToken,
         p_token_expiry: tokenExpiry,
         p_is_active: true,
