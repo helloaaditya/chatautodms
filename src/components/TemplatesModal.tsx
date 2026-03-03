@@ -3,40 +3,42 @@ import { X, MessageSquare, Image, HelpCircle, Send } from 'lucide-react';
 
 export type TemplateId = 'comment_to_dm' | 'story_reply' | 'ice_breakers' | 'dm_auto_responder';
 
+type TemplateIcon = React.ComponentType<{ size?: number; className?: string }>;
+
 export const TEMPLATES: Array<{
   id: TemplateId;
   title: string;
   description: string;
   features: string[];
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: TemplateIcon;
 }> = [
   {
     id: 'comment_to_dm',
     title: 'Comment to DM Flow',
     description: 'Automatically reply to comments and send personalized DMs with interactive buttons.',
     features: ['Auto-reply to comments', 'Send DM with buttons', 'Keyword triggers', 'Link delivery on click'],
-    icon: MessageSquare,
+    icon: MessageSquare as TemplateIcon,
   },
   {
     id: 'story_reply',
     title: 'Story Reply Flow',
     description: 'Respond to story replies instantly and convert viewers into customers with automated DMs.',
     features: ['Story reply triggers', 'Instant DM responses', 'Interactive buttons', 'Link delivery system'],
-    icon: Image,
+    icon: Image as TemplateIcon,
   },
   {
     id: 'ice_breakers',
     title: 'Ice Breakers',
     description: 'Help users start conversations with pre-set frequently asked questions.',
     features: ['Up to 4 custom questions', 'Quick conversation starters', 'Mobile-only feature', 'Automated responses'],
-    icon: HelpCircle,
+    icon: HelpCircle as TemplateIcon,
   },
   {
     id: 'dm_auto_responder',
     title: 'DM Auto Responder',
     description: 'Automatically reply to direct messages with personalized responses and call-to-action buttons.',
     features: ['Auto-reply to DMs', 'Keyword-based triggers', 'Personalized DM replies', 'Interactive buttons & link delivery'],
-    icon: Send,
+    icon: Send as TemplateIcon,
   },
 ];
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShuffleCw, Plus, ImageUp, Play } from 'lucide-react';
+import { ArrowLeft, Shuffle, Plus, ImageUp, Play } from 'lucide-react';
 import { TEMPLATES, type TemplateId } from '../components/TemplatesModal';
 
 const MAX_MESSAGE_LENGTH = 1000;
@@ -160,7 +160,7 @@ export const FlowSetup: React.FC = () => {
           <div className="relative">
             <div className="absolute top-2 right-2 z-10">
               <button type="button" className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
-                <ShuffleCw size={14} /> Shuffle
+                <Shuffle size={14} /> Shuffle
               </button>
             </div>
             <textarea
