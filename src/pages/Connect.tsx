@@ -21,9 +21,9 @@ export const ConnectInstagram: React.FC = () => {
 
   const fetchAccounts = React.useCallback(async () => {
     setError(null);
-    // 1) API with Bearer token (service role)
     const { data: { session } } = await supabase.auth.getSession();
     let list: InstagramAccount[] = [];
+    // 1) API (service role) – often sees new rows immediately after OAuth
     if (session?.access_token) {
       try {
         const res = await fetch('/api/instagram-accounts', {
@@ -37,7 +37,7 @@ export const ConnectInstagram: React.FC = () => {
         /* ignore */
       }
     }
-    // 2) Direct Supabase (RLS) - always run so we have one source of truth
+    // 2) Supabase (RLS) – use if it has data, else keep API result (avoids overwriting with empty after redirect)
     const { data: supabaseData, error: supabaseError } = await supabase.from('instagram_accounts').select('*');
     if (supabaseError) setError(supabaseError.message);
     if (supabaseData?.length) list = supabaseData;
@@ -164,19 +164,13 @@ export const ConnectInstagram: React.FC = () => {
 
       <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-900 dark:text-amber-100 space-y-3">
         <strong>Seeing the same account (e.g. _pastel._eris) on every device/browser?</strong>
-        <p>If your Meta app is in <strong>Development</strong> mode, only accounts added as <strong>Instagram Testers</strong> can connect. Add each Instagram account that should connect:</p>
-        <p className="font-medium">
-          Meta Dashboard → Your App → <strong>Roles</strong> → <strong>Instagram Testers</strong> → Add the Instagram account (they must accept the invite). Then that person logs into Instagram as that account and clicks Connect here.
-        </p>
-        <p className="text-amber-800 dark:text-amber-200/90">Same browser/device but different account?</p>
+        <p>Instagram shows whichever account is <strong>logged in on that device or browser</strong>. So even in Live mode, if that device has _pastel._eris logged in, you’ll see that account.</p>
+        <p className="font-medium">To connect a different account:</p>
         <ol className="list-decimal list-inside space-y-1">
-          <li>Click <strong>Cancel</strong> on the Instagram screen.</li>
-          <li>
-            <a href="https://www.instagram.com/accounts/logout/" target="_blank" rel="noopener noreferrer" className="font-medium underline hover:no-underline">Log out of Instagram</a>
-            {' '}in a new tab (or use an <strong>incognito/private window</strong>).
-          </li>
-          <li>Return here and click <strong>Connect New Account</strong> again to get the login screen.</li>
+          <li>On the device/browser where you want to connect: click <strong>Cancel</strong> on the Instagram screen, then <a href="https://www.instagram.com/accounts/logout/" target="_blank" rel="noopener noreferrer" className="font-medium underline hover:no-underline">log out of Instagram</a> (or use a browser/incognito where you’re not logged in).</li>
+          <li>Return here and click <strong>Connect New Account</strong>. You’ll get the Instagram <strong>login</strong> screen — enter the username and password of the account you want to connect.</li>
         </ol>
+        <p className="text-amber-800 dark:text-amber-200/90 text-xs mt-2">In Development mode, only Instagram Testers can connect — add them in Meta → Roles → Instagram Testers.</p>
       </div>
 
       {error && (

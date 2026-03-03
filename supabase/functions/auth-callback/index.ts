@@ -10,12 +10,6 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // DEBUG: Log full URL (remove in production)
-  const fullUrl = req.url;
-  console.log("[auth-callback] Full URL:", fullUrl);
-  console.log("[auth-callback] Has code:", fullUrl.includes("code="));
-  console.log("[auth-callback] Has state:", fullUrl.includes("state="));
-
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -39,6 +33,8 @@ serve(async (req) => {
   const redirectBase = isInstagramLogin ? stateParts[2] : (stateParts[1] ?? "");
   const appUrl = redirectBase || Deno.env.get("META_APP_URL") || "http://localhost:3001";
   const REDIRECT_URI = redirectBase ? `${redirectBase}/auth/meta/callback` : Deno.env.get("META_REDIRECT_URI")!;
+
+  console.log("[auth-callback] OAuth callback for user", userId?.slice(0, 8) + "...");
 
   if (code.endsWith("#_")) code = code.slice(0, -2);
 
@@ -81,39 +77,59 @@ serve(async (req) => {
       }
 
       const meRes = await fetch(
-        `https://graph.instagram.com/v21.0/me?fields=user_id,username,name,profile_picture_url&access_token=${longLivedToken}`
+        `https://graph.instagram.com/v21.0/me?fields=id,user_id,username,name,profile_picture_url&access_token=${longLivedToken}`
       );
       const meRaw = await meRes.json();
+      if (meRaw?.error) throw new Error(meRaw.error.message ?? "Instagram API error");
       const meData = Array.isArray(meRaw?.data) ? meRaw.data[0] : meRaw;
-      const igId = meData?.user_id ?? igUserId ?? meRaw?.user_id ?? meRaw?.id;
-      if (!igId) throw new Error("Could not get Instagram account id");
+      const igId = meData?.id ?? meData?.user_id ?? igUserId ?? meRaw?.id ?? meRaw?.user_id;
+      if (!igId) {
+        console.error("[auth-callback] /me response missing id:", JSON.stringify(meRaw).slice(0, 300));
+        throw new Error("Could not get Instagram account id");
+      }
 
-      const rpcOk = await supabase.rpc("ensure_profile_exists", { p_user_id: userId }).then(() => true).catch(() => false);
-      if (!rpcOk) {
-        const { data: authUser } = await supabase.auth.admin.getUserById(userId);
-        const email = authUser?.user?.email ?? `${userId}@placeholder.local`;
-        const { error: profileErr } = await supabase.from("profiles").upsert({
+      // Ensure profile exists (required: instagram_accounts.user_id -> profiles.id)
+      await supabase.rpc("ensure_profile_exists", { p_user_id: userId }).catch(() => {});
+      const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+      const profileEmail = authUser?.user?.email ?? `${userId}@temp.local`;
+      const { error: profileErr } = await supabase.from("profiles").upsert(
+        {
           id: userId,
-          email,
+          email: profileEmail,
           full_name: authUser?.user?.user_metadata?.full_name ?? null,
           avatar_url: authUser?.user?.user_metadata?.avatar_url ?? null,
           updated_at: new Date().toISOString(),
-        }, { onConflict: "id", ignoreDuplicates: true });
-        if (profileErr) throw new Error("Could not create profile. Run ensure_profile_exists migration.");
+        },
+        { onConflict: "id", ignoreDuplicates: true }
+      );
+      if (profileErr) {
+        console.error("[auth-callback] Profile upsert failed:", profileErr.message);
+        throw new Error("Could not create profile. Please try again or contact support.");
       }
 
-      const { error } = await supabase.from("instagram_accounts").upsert({
-        user_id: userId,
-        instagram_business_id: igId,
-        page_id: igId,
-        account_name: meData?.username ?? meData?.name ?? meRaw?.username ?? "Instagram",
-        profile_picture: meData?.profile_picture_url ?? meRaw?.profile_picture_url ?? null,
-        access_token: longLivedToken,
-        token_expiry: new Date(Date.now() + expires_in * 1000).toISOString(),
-        is_active: true,
-      }, { onConflict: "instagram_business_id" }).select();
+      const accountName = meData?.username ?? meData?.name ?? meRaw?.username ?? meRaw?.name ?? "Instagram";
+      const { data: insertedRows, error } = await supabase
+        .from("instagram_accounts")
+        .upsert(
+          {
+            user_id: userId,
+            instagram_business_id: String(igId),
+            page_id: String(igId),
+            account_name: accountName,
+            profile_picture: meData?.profile_picture_url ?? meRaw?.profile_picture_url ?? null,
+            access_token: longLivedToken,
+            token_expiry: new Date(Date.now() + expires_in * 1000).toISOString(),
+            is_active: true,
+          },
+          { onConflict: "instagram_business_id" }
+        )
+        .select();
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error("[auth-callback] instagram_accounts upsert failed:", error.message, "user_id:", userId?.slice(0, 8));
+        throw new Error(error.message);
+      }
+      console.log("[auth-callback] Account saved:", accountName, "user_id:", userId?.slice(0, 8), "rows:", insertedRows?.length);
       return new Response(null, {
         status: 302,
         headers: { ...corsHeaders, Location: `${appUrl}/connect?success=1` },
