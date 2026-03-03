@@ -88,9 +88,20 @@ export default async function handler(req: VercelReq, res: VercelRes) {
       return res.status(200).json({ data: [], message: 'Account token missing.' });
     }
 
-    const url = `https://graph.instagram.com/v21.0/${igId}/media?fields=id,media_type,media_url,thumbnail_url,permalink,timestamp&limit=24&access_token=${encodeURIComponent(accessToken)}`;
-    const mediaRes = await fetch(url);
-    const mediaJson = (await mediaRes.json()) as { data?: Array<{ id: string; media_type?: string; media_url?: string; thumbnail_url?: string; permalink?: string; timestamp?: string }>; error?: { message: string } };
+    const fields = 'id,media_type,media_url,thumbnail_url,permalink,timestamp';
+    const baseUrl = `https://graph.instagram.com/v21.0/${igId}/media?fields=${fields}&limit=24`;
+
+    let mediaRes = await fetch(`${baseUrl}&access_token=${encodeURIComponent(accessToken)}`);
+    let mediaJson = (await mediaRes.json()) as { data?: Array<{ id: string; media_type?: string; media_url?: string; thumbnail_url?: string; permalink?: string; timestamp?: string }>; error?: { message: string } };
+
+    if (mediaJson.error?.message?.includes('method type: get')) {
+      mediaRes = await fetch(baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ access_token: accessToken }).toString(),
+      });
+      mediaJson = (await mediaRes.json()) as typeof mediaJson;
+    }
 
     if (mediaJson.error) {
       return res.status(400).json({ error: mediaJson.error.message, data: [] });
