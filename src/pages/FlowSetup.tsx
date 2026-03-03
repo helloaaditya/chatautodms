@@ -34,6 +34,15 @@ export const FlowSetup: React.FC = () => {
   const [publicReply, setPublicReply] = useState(false);
   const [askToFollow, setAskToFollow] = useState(false);
   const [followUp, setFollowUp] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const templateToTriggerType: Record<string, 'dm' | 'comment' | 'mention' | 'first_interaction'> = {
+    comment_to_dm: 'comment',
+    story_reply: 'first_interaction',
+    ice_breakers: 'dm',
+    dm_auto_responder: 'dm',
+  };
 
   const fetchPosts = useCallback(async () => {
     setPostsLoading(true);
@@ -91,9 +100,63 @@ export const FlowSetup: React.FC = () => {
     setKeywords(keywords.filter((x) => x !== k));
   };
 
-  const handleGoLive = () => {
-    // TODO: save automation and go live
-    navigate('/automations');
+  const handleGoLive = async () => {
+    if (!template) return;
+    setSaveError(null);
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setSaveError('Please sign in again.');
+        return;
+      }
+      const { data: accounts } = await supabase
+        .from('instagram_accounts')
+        .select('id')
+        .eq('is_active', true)
+        .limit(1)
+        .order('created_at', { ascending: false });
+      const instagramAccountId = accounts?.[0]?.id;
+      if (!instagramAccountId) {
+        setSaveError('Connect an Instagram account first.');
+        return;
+      }
+      const triggerType = templateToTriggerType[template.id] ?? 'comment';
+      const name = `${template.title} – ${new Date().toLocaleDateString()}`;
+      const config = {
+        templateId: template.id,
+        postMode,
+        selectedPostId: postMode === 'specific' ? selectedPostId : null,
+        message,
+        openingMessage,
+        publicReply,
+        askToFollow,
+        followUp,
+      };
+      const payload = {
+        user_id: user.id,
+        instagram_account_id: instagramAccountId,
+        name,
+        trigger_type: triggerType,
+        trigger_keywords: keywords.length > 0 ? keywords : [],
+        is_active: true,
+        config,
+      };
+      let result = await supabase.from('automations').insert(payload).select('id').single();
+      if (result.error && result.error.message?.includes('config')) {
+        const { config: _c, ...payloadWithoutConfig } = payload;
+        result = await supabase.from('automations').insert(payloadWithoutConfig).select('id').single();
+      }
+      if (result.error) {
+        setSaveError(result.error.message || 'Failed to save automation.');
+        return;
+      }
+      if (result.data?.id) navigate('/automations');
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Failed to save.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!template) {
@@ -302,11 +365,16 @@ export const FlowSetup: React.FC = () => {
           </div>
         </section>
 
+        {saveError && (
+          <p className="mb-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{saveError}</p>
+        )}
         <button
           onClick={handleGoLive}
-          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold shadow-lg shadow-green-500/20 transition-all"
+          disabled={saving}
+          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold shadow-lg shadow-green-500/20 transition-all"
         >
-          <Play size={20} fill="currentColor" /> GO LIVE
+          {saving ? <Loader2 size={20} className="animate-spin" /> : <Play size={20} fill="currentColor" />}
+          {saving ? ' Saving…' : ' GO LIVE'}
         </button>
       </div>
     </div>
