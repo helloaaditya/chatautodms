@@ -106,6 +106,8 @@ async function triggerAutomation(
   type: "dm" | "comment",
   commentPayload?: CommentPayload
 ) {
+  console.log("[webhook] triggerAutomation start", { igBusinessId, type });
+  try {
   // Resolve Instagram business id (from Meta) to our account row UUID
   const { data: accountRow, error: accountError } = await supabase
     .from("instagram_accounts")
@@ -209,6 +211,9 @@ async function triggerAutomation(
     if (automation.flows?.[0]) {
       await executeFlow(supabase, automation.flows[0], senderId, commentId, accountUuid);
     }
+  }
+  } catch (e) {
+    console.error("[webhook] triggerAutomation error", e);
   }
 }
 
