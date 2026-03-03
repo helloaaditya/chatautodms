@@ -162,6 +162,21 @@ export const ConnectInstagram: React.FC = () => {
         </div>
       </div>
 
+      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-800 dark:text-blue-200">
+        <strong>Connecting a different Instagram account?</strong> Instagram will show the account you’re already logged into in this browser. To see the login screen and enter another account’s username and password: log out of Instagram first, then click Connect — or open this site in an <strong>incognito/private window</strong> and connect there.
+        <span className="block mt-2">
+          <a
+            href="https://www.instagram.com/accounts/logout/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium underline hover:no-underline"
+          >
+            Open Instagram to log out
+          </a>
+          {' '}(then return here and click Connect New Account).
+        </span>
+      </div>
+
       {error && (
         <div className="space-y-3">
           <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 text-sm font-medium">
@@ -206,6 +221,9 @@ export const ConnectInstagram: React.FC = () => {
               </button>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
                 Log in with Instagram and set your permissions. Once that&apos;s done, you&apos;re all set to connect to ChatAutoDM!
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                To use a different Instagram account than the one logged in here, log out of Instagram first or use an incognito window.
               </p>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-6">
                 By continuing, you agree to our <a href="/terms" className="underline hover:text-gray-600">Terms of Service</a> and <a href="/privacy" className="underline hover:text-gray-600">Privacy Policy</a>.
