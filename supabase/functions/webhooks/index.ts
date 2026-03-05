@@ -329,6 +329,19 @@ async function triggerAutomation(
         console.log("[webhook] skip automation (no message in config)", { automationId: automation.id });
         continue;
       }
+      const { data: _claimRow, error: claimErr } = await supabase
+        .from("automation_sent_log")
+        .insert({ automation_id: automation.id, trigger_type: "comment", trigger_id: commentId })
+        .select("id")
+        .single();
+      if (claimErr) {
+        if (claimErr.code === "23505") {
+          console.log("[webhook] skip automation (already sent for this comment)", { automationId: automation.id, commentId });
+          continue;
+        }
+        console.warn("[webhook] automation_sent_log insert error", claimErr.code, claimErr.message);
+        continue;
+      }
       if (publicReply && String(publicReplyText).trim()) {
         try {
           await postPublicReply(commentId, String(publicReplyText).trim(), accountRow.access_token);

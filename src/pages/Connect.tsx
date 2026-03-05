@@ -105,8 +105,12 @@ export const ConnectInstagram: React.FC = () => {
     setError(null);
     // Use Instagram App ID if set (from App Dashboard > Instagram > Business login settings); else main Meta App ID
     const APP_ID = import.meta.env.VITE_INSTAGRAM_APP_ID || import.meta.env.VITE_META_APP_ID;
-    // Must match EXACTLY Meta Dashboard > Instagram > Business login > Valid OAuth Redirect URIs. Production: https://www.growcreation.in/auth/meta/callback (no trailing slash)
-    const REDIRECT_URI = (import.meta.env.VITE_META_REDIRECT_URI || `${window.location.origin}/auth/meta/callback`).replace(/\/$/, '');
+    // Must match EXACTLY Meta Dashboard > Instagram > Business login > Valid OAuth Redirect URIs (no trailing slash)
+    const PRODUCTION_REDIRECT = 'https://www.growcreation.in/auth/meta/callback';
+    const REDIRECT_URI = (
+      import.meta.env.VITE_META_REDIRECT_URI ||
+      (window.location.hostname === 'www.growcreation.in' ? PRODUCTION_REDIRECT : `${window.location.origin}/auth/meta/callback`)
+    ).replace(/\/$/, '');
     if (!APP_ID) {
       setError('App configuration missing. Set VITE_META_APP_ID or VITE_INSTAGRAM_APP_ID.');
       return;
