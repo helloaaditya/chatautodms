@@ -313,7 +313,11 @@ export const FlowSetup: React.FC = () => {
 
   const selectedAccount = selectedAccountId ? accounts.find((a) => a.id === selectedAccountId) : null;
   const selectedPost = selectedPostId ? posts.find((p) => p.id === selectedPostId) : null;
-  const previewPostImage = selectedPost?.media_url || selectedPost?.thumbnail_url;
+  const isVideoPost = selectedPost?.media_type === 'VIDEO';
+  const previewPostImage = isVideoPost
+    ? (selectedPost?.thumbnail_url || null)
+    : (selectedPost?.media_url || selectedPost?.thumbnail_url || null);
+  const previewPostVideoUrl = isVideoPost ? selectedPost?.media_url || null : null;
 
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
@@ -349,9 +353,18 @@ export const FlowSetup: React.FC = () => {
                     className="w-full h-full object-cover"
                     onError={() => setPreviewImageError(true)}
                   />
+                ) : previewPostVideoUrl && !previewImageError ? (
+                  <video
+                    src={previewPostVideoUrl}
+                    className="w-full h-full object-cover"
+                    controls
+                    playsInline
+                    muted
+                    onError={() => setPreviewImageError(true)}
+                  />
                 ) : (
                   <p className="text-gray-500 dark:text-gray-400 text-[10px] text-center px-2">
-                    {selectedPost && (!previewPostImage || previewImageError) ? 'Post image unavailable' : "You haven't picked a post yet"}
+                    {selectedPost && (!previewPostImage && !previewPostVideoUrl || previewImageError) ? 'Post image unavailable' : "You haven't picked a post yet"}
                   </p>
                 )}
               </div>
@@ -615,7 +628,8 @@ export const FlowSetup: React.FC = () => {
                   <>
                     <div className="flex gap-3 flex-wrap overflow-y-auto min-h-0 py-2 flex-1 content-start">
                       {posts.map((post) => {
-                        const thumb = post.thumbnail_url || post.media_url;
+                        const isVideo = post.media_type === 'VIDEO';
+                        const thumb = isVideo ? (post.thumbnail_url || null) : (post.media_url || post.thumbnail_url || null);
                         const isSelected = selectedPostId === post.id;
                         return (
                           <button
@@ -627,7 +641,9 @@ export const FlowSetup: React.FC = () => {
                             {thumb ? (
                               <img src={thumb} alt="" className="w-full h-full object-cover" />
                             ) : (
-                              <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400 text-xs">Media</div>
+                              <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400">
+                                {isVideo ? <Play size={20} className="opacity-70" /> : <span className="text-xs">Media</span>}
+                              </div>
                             )}
                           </button>
                         );
