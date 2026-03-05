@@ -59,6 +59,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   }, [dark]);
 
+  React.useEffect(() => {
+    const isDark = document.documentElement.classList.contains('dark');
+    setDark(isDark);
+  }, []);
+
   const toggleDark = () => {
     const next = !dark;
     setDark(next);

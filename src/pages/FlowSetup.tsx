@@ -51,6 +51,7 @@ export const FlowSetup: React.FC = () => {
   const [imageUploading, setImageUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [previewImageError, setPreviewImageError] = useState(false);
 
   const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
   const MAX_IMAGE_MB = 5;
@@ -121,6 +122,10 @@ export const FlowSetup: React.FC = () => {
   useEffect(() => {
     if (accounts.length > 0 && !selectedAccountId) setSelectedAccountId(accounts[0].id);
   }, [accounts, selectedAccountId]);
+
+  useEffect(() => {
+    setPreviewImageError(false);
+  }, [selectedPostId, posts]);
 
   // Load existing automation when editing
   useEffect(() => {
@@ -337,10 +342,17 @@ export const FlowSetup: React.FC = () => {
                 </span>
               </div>
               <div className="flex-1 min-h-[140px] bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center overflow-hidden">
-                {previewPostImage ? (
-                  <img src={previewPostImage} alt="Post" className="w-full h-full object-cover" />
+                {previewPostImage && !previewImageError ? (
+                  <img
+                    src={previewPostImage}
+                    alt="Post"
+                    className="w-full h-full object-cover"
+                    onError={() => setPreviewImageError(true)}
+                  />
                 ) : (
-                  <p className="text-gray-500 dark:text-gray-400 text-[10px] text-center px-2">You haven&apos;t picked a post yet</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-[10px] text-center px-2">
+                    {selectedPost && (!previewPostImage || previewImageError) ? 'Post image unavailable' : "You haven't picked a post yet"}
+                  </p>
                 )}
               </div>
               {/* Like, Comment, Share, Save - bold, big, aligned */}

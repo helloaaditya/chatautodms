@@ -7,6 +7,15 @@
     <title>ChatAutoDMs | Instagram Automation</title>
   </head>
   <body>
+    <script>
+      (function() {
+        var key = 'chatautodms-theme';
+        var stored = localStorage.getItem(key);
+        var dark = stored === 'dark' || (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      })();
+    </script>
     <div id="root"></div>
     <!-- Capture install prompt early so we can call prompt() later (avoids "Banner not shown" warning) -->
     <script>

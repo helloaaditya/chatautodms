@@ -88,15 +88,37 @@ export default async function handler(req: VercelReq, res: VercelRes) {
       return res.status(200).json({ data: [], message: 'Account token missing.' });
     }
 
-    const url = `https://graph.instagram.com/v21.0/${igId}/media?fields=id,media_type,media_url,thumbnail_url,permalink,timestamp&limit=24&access_token=${encodeURIComponent(accessToken)}`;
+    const url = `https://graph.instagram.com/v21.0/${igId}/media?fields=id,media_type,media_url,thumbnail_url,permalink,timestamp,children{media_url,thumbnail_url,media_type}&limit=24&access_token=${encodeURIComponent(accessToken)}`;
     const mediaRes = await fetch(url);
-    const mediaJson = (await mediaRes.json()) as { data?: Array<{ id: string; media_type?: string; media_url?: string; thumbnail_url?: string; permalink?: string; timestamp?: string }>; error?: { message: string } };
+    type MediaNode = {
+      id: string;
+      media_type?: string;
+      media_url?: string;
+      thumbnail_url?: string;
+      permalink?: string;
+      timestamp?: string;
+      children?: { data?: Array<{ media_url?: string; thumbnail_url?: string; media_type?: string }> };
+    };
+    const mediaJson = (await mediaRes.json()) as { data?: MediaNode[]; error?: { message: string } };
 
     if (mediaJson.error) {
       return res.status(400).json({ error: mediaJson.error.message, data: [] });
     }
 
-    const list = mediaJson.data ?? [];
+    const raw = mediaJson.data ?? [];
+    const list = raw.map((item) => {
+      const firstChild = item.media_type === 'CAROUSEL_ALBUM' && item.children?.data?.[0];
+      const mediaUrl = item.media_url ?? firstChild?.media_url;
+      const thumbUrl = item.thumbnail_url ?? firstChild?.thumbnail_url ?? firstChild?.media_url;
+      return {
+        id: item.id,
+        media_type: item.media_type,
+        media_url: mediaUrl ?? undefined,
+        thumbnail_url: thumbUrl ?? undefined,
+        permalink: item.permalink,
+        timestamp: item.timestamp,
+      };
+    });
     return res.status(200).json({ data: list });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to load posts';
