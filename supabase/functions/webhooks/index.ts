@@ -83,8 +83,9 @@ serve(async (req) => {
             const mediaId = rawMediaId != null ? String(rawMediaId).trim() || null : null;
 
             if (commentId && senderId) {
+              const fromUsername = typeof fromObj?.username === "string" ? fromObj.username : null;
               console.log("[webhook] comment received", { igAccountId, commentId, mediaId, text: commentText?.slice(0, 50) });
-              await triggerAutomation(supabase, igAccountId, senderId, commentText, "comment", { commentId, mediaId });
+              await triggerAutomation(supabase, igAccountId, senderId, commentText, "comment", { commentId, mediaId, fromUsername });
             }
           }
         }
@@ -96,7 +97,7 @@ serve(async (req) => {
   return new Response("Not allowed", { status: 405 });
 });
 
-type CommentPayload = { commentId: string; mediaId: string | null };
+type CommentPayload = { commentId: string; mediaId: string | null; fromUsername?: string | null };
 
 async function triggerAutomation(
   supabase: any,
@@ -196,15 +197,31 @@ async function triggerAutomation(
       );
       if (sent) {
         console.log("[webhook] private reply sent");
-        await supabase
-          .from("analytics")
-          .insert({
+        try {
+          await supabase.from("analytics").insert({
             user_id: automation.user_id ?? null,
             instagram_account_id: accountUuid,
             automation_id: automation.id,
             event_type: "message_sent",
-          })
-          .catch(() => {});
+          });
+        } catch (_) {
+          /* ignore analytics insert errors */
+        }
+        try {
+          await saveLeadAndConversation(supabase, {
+            user_id: automation.user_id,
+            instagram_account_id: accountUuid,
+            instagram_business_id: accountRow.instagram_business_id,
+            automation_id: automation.id,
+            sender_id: senderId,
+            sender_username: commentPayload?.fromUsername ?? null,
+            incoming_text: text,
+            outgoing_text: String(messageText).trim(),
+            source: "comment",
+          });
+        } catch (_) {
+          /* ignore lead save errors */
+        }
       }
       continue;
     }
@@ -216,6 +233,55 @@ async function triggerAutomation(
   } catch (e) {
     console.error("[webhook] triggerAutomation error", e);
   }
+}
+
+type LeadConversationPayload = {
+  user_id: string;
+  instagram_account_id: string;
+  instagram_business_id: string;
+  automation_id: string;
+  sender_id: string;
+  sender_username: string | null;
+  incoming_text: string;
+  outgoing_text: string;
+  source: "comment" | "dm";
+};
+
+async function saveLeadAndConversation(supabase: any, p: LeadConversationPayload): Promise<void> {
+  await supabase.from("leads").upsert(
+    {
+      user_id: p.user_id,
+      instagram_account_id: p.instagram_account_id,
+      instagram_user_id: p.sender_id,
+      username: p.sender_username ?? undefined,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,instagram_user_id", ignoreDuplicates: false }
+  );
+  await supabase.from("message_logs").insert([
+    {
+      user_id: p.user_id,
+      instagram_account_id: p.instagram_account_id,
+      automation_id: p.automation_id,
+      sender_id: p.sender_id,
+      receiver_id: p.instagram_business_id,
+      message_text: p.incoming_text,
+      message_type: "incoming",
+      status: "received",
+      source: p.source,
+    },
+    {
+      user_id: p.user_id,
+      instagram_account_id: p.instagram_account_id,
+      automation_id: p.automation_id,
+      sender_id: p.instagram_business_id,
+      receiver_id: p.sender_id,
+      message_text: p.outgoing_text,
+      message_type: "outgoing",
+      status: "sent",
+      source: p.source,
+    },
+  ]);
 }
 
 async function sendPrivateReply(igBusinessId: string, accessToken: string, commentId: string, text: string): Promise<boolean> {
@@ -255,12 +321,15 @@ async function sendPrivateReply(igBusinessId: string, accessToken: string, comme
 }
 
 async function executeFlow(supabase: any, flow: any, senderId: string, commentId?: string, instagramAccountId?: string) {
-  await supabase.from("analytics").insert({
-    instagram_account_id: instagramAccountId ?? flow.instagram_account_id,
-    automation_id: flow.automation_id,
-    event_type: "automation_triggered"
-  }).catch(() => {});
-
+  try {
+    await supabase.from("analytics").insert({
+      instagram_account_id: instagramAccountId ?? flow.instagram_account_id,
+      automation_id: flow.automation_id,
+      event_type: "automation_triggered"
+    });
+  } catch (_) {
+    /* ignore */
+  }
   const startNode = flow.nodes?.find((n: any) => n.type === "start");
   if (startNode) {
     // Flow execution can be extended here

@@ -12,6 +12,7 @@ import { ConnectInstagram } from './pages/Connect';
 import { Automations } from './pages/Automations';
 import { FlowSetup } from './pages/FlowSetup';
 import { Analytics } from './pages/Analytics';
+import { Leads } from './pages/Leads';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -70,7 +71,7 @@ const App: React.FC = () => {
       <Route path="/automations/new/:templateId" element={<ProtectedRoute><FlowSetup /></ProtectedRoute>} />
       <Route path="/automations/edit/:automationId" element={<ProtectedRoute><FlowSetup /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
-      <Route path="/leads" element={<ProtectedRoute><div className="p-8">Leads Page (Coming Soon)</div></ProtectedRoute>} />
+      <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
       <Route path="/billing" element={<ProtectedRoute><div className="p-8">Billing Page (Coming Soon)</div></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><div className="p-8">Settings Page (Coming Soon)</div></ProtectedRoute>} />
 

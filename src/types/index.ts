@@ -58,11 +58,29 @@ export type Flow = {
 
 export type Lead = {
   id: string;
+  user_id: string;
+  instagram_account_id: string;
   instagram_user_id: string;
-  username: string;
-  full_name?: string;
-  email?: string;
-  phone?: string;
+  username?: string | null;
+  full_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
   tags: string[];
   created_at: string;
+  updated_at?: string;
+  account_name?: string;
 };
+
+export type MessageLog = {
+  id: string;
+  user_id: string;
+  instagram_account_id: string;
+  automation_id?: string | null;
+  sender_id: string;
+  receiver_id: string;
+  message_text: string | null;
+  message_type: 'incoming' | 'outgoing';
+  status: string | null;
+  source?: string | null;
+  created_at: string;
+}
