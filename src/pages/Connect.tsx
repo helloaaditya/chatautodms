@@ -18,6 +18,7 @@ export const ConnectInstagram: React.FC = () => {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
 
   const fetchAccounts = React.useCallback(async () => {
     setError(null);
@@ -135,6 +136,16 @@ export const ConnectInstagram: React.FC = () => {
   // Always use redirect flow - more reliable than FB.login when Meta restricts app
   const handleConnect = handleConnectRedirect;
 
+  const handleDisconnect = async (account: InstagramAccount) => {
+    if (!window.confirm(`Remove "${account.account_name || 'this account'}" (ID: ${account.instagram_business_id})? Automations for this account will stop working.`)) return;
+    setDisconnectingId(account.id);
+    setError(null);
+    const { error: err } = await supabase.from('instagram_accounts').delete().eq('id', account.id);
+    setDisconnectingId(null);
+    if (err) setError(err.message);
+    else fetchAccounts();
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -233,7 +244,7 @@ export const ConnectInstagram: React.FC = () => {
             </div>
             <div>
               <h4 className="font-bold text-lg">Set up Auto DMs & Automations</h4>
-              <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Create keyword triggers, auto-reply to DMs and comments, capture leads.</p>
+              <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Create keyword triggers, auto-reply to DMs and comments, capture leads. Use the account that owns the post for comment automations.</p>
             </div>
           </div>
           <button
@@ -264,19 +275,33 @@ export const ConnectInstagram: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => { setLoading(true); fetchAccounts(); }}
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                    title="Refresh"
+                  >
                     <RefreshCcw size={18} />
                   </button>
-                  <button className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors">
-                    <Trash2 size={18} />
+                  <button
+                    type="button"
+                    onClick={() => handleDisconnect(account)}
+                    disabled={disconnectingId === account.id}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors disabled:opacity-50"
+                    title="Remove account"
+                  >
+                    {disconnectingId === account.id ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
                   </button>
                 </div>
               </div>
               <div>
                 <h4 className="font-bold text-lg truncate">{account.account_name || 'Instagram Account'}</h4>
-                <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-1 truncate">
+                <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-1 truncate" title="Use this account when creating comment automations for posts on this profile">
                   ID: {account.instagram_business_id}
                 </p>
+                {accounts.filter((a) => a.account_name === account.account_name && a.id !== account.id).length > 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Duplicate handle — remove the one you don’t use.</p>
+                )}
               </div>
               <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
                 <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg text-xs font-semibold">

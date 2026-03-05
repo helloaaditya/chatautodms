@@ -22,6 +22,7 @@ export const AuthPage: React.FC = () => {
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    // Redirect after email verification uses this URL. For localhost, add it in Supabase: Authentication → URL Configuration → Redirect URLs (e.g. http://localhost:5173/**)
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {

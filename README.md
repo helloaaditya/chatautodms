@@ -41,7 +41,19 @@ Follow these steps to run the Instagram Automation SaaS locally.
    ```bash
    npm run dev
    ```
-   The app will be available at [http://localhost:3000](http://localhost:3000).
+   The app will be available at [http://localhost:5173](http://localhost:5173) (or the port Vite prints).
+
+4. **Magic link (email) login from localhost:**  
+   If the verification email sends you to production instead of localhost, add your local URL to Supabase:
+   - **Supabase Dashboard** → **Authentication** → **URL Configuration**
+   - Under **Redirect URLs**, add: `http://localhost:5173/**` (use your actual port if different)
+   - Save. Then when you request a magic link on localhost, the link in the email will redirect back to localhost after verification.
+
+5. **Seeing "Connect account" on localhost but accounts exist in production?**  
+   Use the **same** Supabase project locally so the app sees the same data:
+   - In `.env.local` set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to your **hosted** project (e.g. `https://xxxx.supabase.co`), not `http://localhost:54321`.
+   - Log in on localhost with the **same email** you use in production. Accounts and automations are stored in Supabase, so they will appear once the URL and session match.
+   - The `/api/*` routes (e.g. fetch accounts) are not run by Vite; the app falls back to direct Supabase when the API is unavailable. To run API routes locally, use `vercel dev` instead of `npm run dev`.
 
 ## 3. Local Webhooks (Meta & Stripe)
 To test webhooks locally, use the CLI tools to forward events to your local functions.

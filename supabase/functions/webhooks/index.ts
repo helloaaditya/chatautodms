@@ -108,18 +108,19 @@ async function triggerAutomation(
 ) {
   console.log("[webhook] triggerAutomation start", { igBusinessId, type });
   try {
-  // Resolve Instagram business id (from Meta) to our account row UUID
-  const { data: accountRow, error: accountError } = await supabase
+  // Resolve Instagram business id (from Meta) to our account row UUID (use limit(1) to avoid .single() error when 0 or 2+ rows)
+  const { data: accountRows, error: accountError } = await supabase
     .from("instagram_accounts")
     .select("id, access_token, instagram_business_id")
     .eq("instagram_business_id", igBusinessId)
     .eq("is_active", true)
-    .single();
+    .limit(1);
 
   if (accountError) {
     console.log("[webhook] account lookup error", { igBusinessId, error: accountError.message });
     return;
   }
+  const accountRow = Array.isArray(accountRows) ? accountRows[0] : null;
   if (!accountRow) {
     console.log("[webhook] no account found for ig id", igBusinessId);
     return;
