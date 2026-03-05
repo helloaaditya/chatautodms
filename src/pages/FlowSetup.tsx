@@ -17,6 +17,14 @@ type InstagramPost = {
   timestamp?: string;
 };
 
+type InstagramStory = {
+  id: string;
+  media_type?: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  timestamp?: string;
+};
+
 export const FlowSetup: React.FC = () => {
   const { templateId, automationId } = useParams<{ templateId?: string; automationId?: string }>();
   const navigate = useNavigate();
@@ -53,6 +61,9 @@ export const FlowSetup: React.FC = () => {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [previewImageError, setPreviewImageError] = useState(false);
   const [anyStory, setAnyStory] = useState(true);
+  const [stories, setStories] = useState<InstagramStory[]>([]);
+  const [storiesLoading, setStoriesLoading] = useState(false);
+  const [storiesError, setStoriesError] = useState<string | null>(null);
 
   const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
   const MAX_IMAGE_MB = 5;
@@ -113,6 +124,33 @@ export const FlowSetup: React.FC = () => {
       setPosts([]);
     } finally {
       setPostsLoading(false);
+    }
+  }, [selectedAccountId]);
+
+  const fetchStories = useCallback(async () => {
+    if (!selectedAccountId) return;
+    setStoriesLoading(true);
+    setStoriesError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setStories([]);
+        return;
+      }
+      const res = await fetch(`/api/instagram-stories?accountId=${encodeURIComponent(selectedAccountId)}`, {
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      const list = Array.isArray(json?.data) ? json.data : [];
+      setStories(list);
+      if (!res.ok && json?.error) setStoriesError(json.error || json.message);
+      if (json?.message && list.length === 0) setStoriesError(json.message);
+    } catch (e) {
+      setStoriesError(e instanceof Error ? e.message : 'Failed to load stories');
+      setStories([]);
+    } finally {
+      setStoriesLoading(false);
     }
   }, [selectedAccountId]);
 
@@ -182,6 +220,15 @@ export const FlowSetup: React.FC = () => {
       setSelectedPostId(null);
     }
   }, [postMode, selectedAccountId, fetchPosts]);
+
+  useEffect(() => {
+    if (templateId === 'story_reply' && selectedAccountId) {
+      fetchStories();
+    } else {
+      setStories([]);
+      setStoriesError(null);
+    }
+  }, [templateId, selectedAccountId, fetchStories]);
 
   const addKeyword = () => {
     const k = keywordInput.trim();
@@ -348,8 +395,23 @@ export const FlowSetup: React.FC = () => {
                     )}
                   </div>
                   <span className="text-[10px] font-semibold text-gray-900 dark:text-white">Your story</span>
-                  <div className="mt-3 w-full flex-1 min-h-[80px] bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                    <p className="text-gray-500 dark:text-gray-400 text-[9px] text-center px-2">Story preview thumbnail</p>
+                  <div className="mt-3 w-full flex-1 min-h-[80px] bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
+                    {stories.length > 0 ? (() => {
+                      const first = stories[0];
+                      const isVideo = first.media_type === 'VIDEO';
+                      const thumb = isVideo ? (first.thumbnail_url || first.media_url) : (first.media_url || first.thumbnail_url);
+                      return thumb ? (
+                        isVideo ? (
+                          <video src={first.media_url} poster={first.thumbnail_url} className="w-full h-full object-cover" muted playsInline loop />
+                        ) : (
+                          <img src={thumb} alt="" className="w-full h-full object-cover" />
+                        )
+                      ) : (
+                        <p className="text-gray-500 dark:text-gray-400 text-[9px] text-center px-2">Story preview</p>
+                      );
+                    })() : (
+                      <p className="text-gray-500 dark:text-gray-400 text-[9px] text-center px-2">Story preview thumbnail</p>
+                    )}
                   </div>
                 </div>
                 <div className="px-2 py-2 border-t border-gray-100 dark:border-gray-800 flex-shrink-0">
@@ -646,10 +708,45 @@ export const FlowSetup: React.FC = () => {
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">When someone replies to your story, they’ll get the DM message you set below.</p>
                 </div>
-                <div className="mt-6 flex-1 min-h-0 border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-xl flex items-center justify-center">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">No content</p>
-                </div>
-                <button type="button" className="mt-3 text-sm text-blue-600 dark:text-blue-400 font-medium hover:underline flex-shrink-0">Show More</button>
+                {!selectedAccountId && (
+                  <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Select an Instagram account above.</p>
+                )}
+                {selectedAccountId && storiesLoading && (
+                  <div className="mt-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <Loader2 size={18} className="animate-spin" /> Loading stories…
+                  </div>
+                )}
+                {selectedAccountId && !storiesLoading && storiesError && (
+                  <p className="mt-4 text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">{storiesError}</p>
+                )}
+                {selectedAccountId && !storiesLoading && stories.length > 0 && (
+                  <div className="mt-4 flex-1 min-h-0 flex flex-col">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Your active stories ({stories.length})</p>
+                    <div className="flex gap-3 flex-wrap overflow-y-auto min-h-0 flex-1 content-start">
+                      {stories.map((story) => {
+                        const isVideo = story.media_type === 'VIDEO';
+                        const thumb = isVideo ? (story.thumbnail_url || story.media_url) : (story.media_url || story.thumbnail_url);
+                        return (
+                          <div key={story.id} className="w-24 h-24 rounded-xl overflow-hidden border-2 border-gray-200 dark:border-gray-600 flex-shrink-0">
+                            {thumb ? (
+                              <img src={thumb} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400">
+                                {isVideo ? <Play size={20} className="opacity-70" /> : <span className="text-xs">Story</span>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button type="button" onClick={fetchStories} className="mt-2 text-sm text-blue-600 dark:text-blue-400 font-medium hover:underline flex-shrink-0">Refresh stories</button>
+                  </div>
+                )}
+                {selectedAccountId && !storiesLoading && !storiesError && stories.length === 0 && (
+                  <div className="mt-6 flex-1 min-h-0 border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-xl flex items-center justify-center p-4">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center">No stories right now. Post a story on Instagram to see it here (stories last 24h).</p>
+                  </div>
+                )}
               </>
             ) : (
               <>
