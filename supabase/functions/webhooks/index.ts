@@ -51,7 +51,8 @@ serve(async (req) => {
     const obj = body.object;
     const hasEntry = Array.isArray(body.entry);
     if (obj !== "instagram" || !hasEntry) {
-      console.log("[webhook] Ignoring payload – object:", obj, "entries:", hasEntry ? body.entry?.length : 0);
+      const entryLen = Array.isArray(body.entry) ? body.entry.length : 0;
+      console.log("[webhook] Ignoring payload – object:", obj, "entries:", entryLen);
     }
 
     if (body.object === "instagram" && Array.isArray(body.entry)) {
