@@ -147,7 +147,7 @@ async function triggerAutomation(
     if (isDone) {
       const { data: pendingList, error: pendingErr } = await supabase
         .from("pending_dm_content")
-        .select("id, content_text, user_id, automation_id, sender_full_name")
+        .select("id, content_text, user_id, automation_id, sender_full_name, follow_reminder_sent")
         .eq("instagram_account_id", accountUuid)
         .eq("instagram_sender_id", senderId)
         .limit(1);
@@ -156,6 +156,16 @@ async function triggerAutomation(
       }
       const pending = Array.isArray(pendingList) ? pendingList[0] : null;
       if (pending?.content_text) {
+        const alreadyReminded = !!(pending as { follow_reminder_sent?: boolean }).follow_reminder_sent;
+        if (!alreadyReminded) {
+          const reminderText = "Please follow our account first. Once you've followed, tap the Follow now button again to get the content.";
+          const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText);
+          if (sent) {
+            await supabase.from("pending_dm_content").update({ follow_reminder_sent: true }).eq("id", pending.id);
+            console.log("[webhook] sent follow reminder (tap again after following)");
+          }
+          return;
+        }
         const name = (pending as { sender_full_name?: string | null }).sender_full_name?.trim();
         const thankYouMessage = name
           ? `Hi ${name}!\n\nThank you! Here's what you asked for:\n\n${pending.content_text}`
@@ -202,10 +212,25 @@ async function triggerAutomation(
         }) : null;
         if (withAskAndMessage?.config && typeof (withAskAndMessage.config as Record<string, unknown>).message === "string") {
           const content = String((withAskAndMessage.config as Record<string, unknown>).message).trim();
-          const thankYouMessage = `Thank you! Here's what you asked for:\n\n${content}`;
-          const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
+          const reminderText = "Please follow our account first. Once you've followed, tap the Follow now button again to get the content.";
+          const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText);
           if (sent) {
-            console.log("[webhook] sent main content via fallback (no pending row)");
+            try {
+              await supabase.from("pending_dm_content").upsert(
+                {
+                  user_id: (withAskAndMessage as { user_id: string }).user_id,
+                  instagram_account_id: accountUuid,
+                  instagram_sender_id: senderId,
+                  automation_id: (withAskAndMessage as { id: string }).id,
+                  content_text: content,
+                  follow_reminder_sent: true,
+                },
+                { onConflict: "instagram_account_id,instagram_sender_id" }
+              );
+            } catch (_) {
+              /* ignore */
+            }
+            console.log("[webhook] sent follow reminder via fallback (no pending row), created pending for second tap");
           }
         }
       }
