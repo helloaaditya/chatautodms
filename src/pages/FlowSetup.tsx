@@ -486,6 +486,9 @@ export const FlowSetup: React.FC = () => {
         {/* 4 Send DM Message */}
         <section className="mb-8">
           <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">4 Send DM Message</h2>
+          {askToFollow && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">When &quot;Ask to follow&quot; is on, this message is sent only after they tap the <strong>Follow now</strong> button in DMs (no typing required).</p>
+          )}
           <div className="relative">
             <div className="absolute top-2 right-2 z-10">
               <button type="button" className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
@@ -574,7 +577,10 @@ export const FlowSetup: React.FC = () => {
                 </button>
               </div>
               {followUp && (
-                <textarea placeholder="Follow-up message (sent right after the main DM)" value={followUpMessage} onChange={(e) => setFollowUpMessage(e.target.value.slice(0, 500))} rows={2} className="mt-2 w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-sm resize-none" />
+                <>
+                  <textarea placeholder={askToFollow ? "e.g. Tap the Follow now button above to get the content!" : "Follow-up message (sent right after the main DM)"} value={followUpMessage} onChange={(e) => setFollowUpMessage(e.target.value.slice(0, 500))} rows={2} className="mt-2 w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-sm resize-none" />
+                  {askToFollow && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Sent after the &quot;follow us&quot; DM. They get the main content when they tap the Follow now button.</p>}
+                </>
               )}
             </div>
           </div>

@@ -57,12 +57,16 @@ serve(async (req) => {
         const igAccountId = entry.id as string;
         if (!igAccountId) continue;
 
-        // A. Handle Messaging (DMs)
+        // A. Handle Messaging (DMs) – text, quick_reply (button tap), or postback
         if (Array.isArray(entry.messaging)) {
-          for (const messageObj of entry.messaging as Array<{ sender?: { id?: string }; message?: { text?: string } }>) {
+          for (const messageObj of entry.messaging as Array<{ sender?: { id?: string }; message?: { text?: string; quick_reply?: { payload?: string }; is_echo?: boolean }; postback?: { payload?: string; title?: string } }>) {
+            if (messageObj.message?.is_echo) continue;
             const senderId = messageObj.sender?.id;
-            const messageText = messageObj.message?.text;
-            if (senderId && messageText) {
+            if (!senderId) continue;
+            const postbackPayload = messageObj.postback?.payload;
+            const quickReplyPayload = messageObj.message?.quick_reply?.payload;
+            const messageText = messageObj.message?.text ?? postbackPayload ?? quickReplyPayload;
+            if (messageText) {
               await triggerAutomation(supabase, igAccountId, senderId, messageText, "dm");
             }
           }
@@ -131,6 +135,48 @@ async function triggerAutomation(
 
   const accountUuid = accountRow.id;
   console.log("[webhook] account resolved", { accountUuid, type });
+
+  if (type === "dm") {
+    const normalized = text.trim().toLowerCase();
+    const isFollowCta = normalized === "follow_cta";
+    const doneKeywords = ["done", "followed", "yes", "ok", "follow"];
+    const isDone = isFollowCta || doneKeywords.some((kw) => normalized === kw || normalized.includes(kw));
+    if (isDone) {
+      const { data: pendingList } = await supabase
+        .from("pending_dm_content")
+        .select("id, content_text, user_id, automation_id")
+        .eq("instagram_account_id", accountUuid)
+        .eq("instagram_sender_id", senderId)
+        .limit(1);
+      const pending = Array.isArray(pendingList) ? pendingList[0] : null;
+      if (pending?.content_text) {
+        const thankYouMessage = `Thank you! Here's what you asked for:\n\n${pending.content_text}`;
+        const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
+        if (sent) {
+          await supabase.from("pending_dm_content").delete().eq("id", pending.id);
+          try {
+            await saveLeadAndConversation(supabase, {
+              user_id: pending.user_id,
+              instagram_account_id: accountUuid,
+              instagram_business_id: accountRow.instagram_business_id,
+              automation_id: pending.automation_id ?? undefined,
+              sender_id: senderId,
+              sender_username: null,
+              sender_profile_picture: null,
+              sender_full_name: null,
+              incoming_text: text,
+              outgoing_text: thankYouMessage,
+              source: "dm",
+            });
+          } catch (_) {
+            /* ignore */
+          }
+          console.log("[webhook] sent pending content after follow confirmation");
+        }
+        return;
+      }
+    }
+  }
 
   const { data: automations, error: autoError } = await supabase
     .from("automations")
@@ -206,8 +252,74 @@ async function triggerAutomation(
           console.error("[webhook] public reply failed", e);
         }
       }
+      if (askToFollow) {
+        const followRequestParts: string[] = [];
+        if (openingMessage && openingMessageText.trim()) followRequestParts.push(openingMessageText.trim());
+        if (askToFollowText.trim()) followRequestParts.push(askToFollowText.trim());
+        followRequestParts.push("Tap the Follow now button below to get the content.");
+        const followRequestText = followRequestParts.join("\n\n");
+        console.log("[webhook] sending follow request (ask to follow)", { automationId: automation.id, commentId });
+        const sent = await sendPrivateReply(accountRow.instagram_business_id, accountRow.access_token, commentId, followRequestText);
+        if (sent) {
+          try {
+            await supabase.from("pending_dm_content").upsert(
+              {
+                user_id: automation.user_id,
+                instagram_account_id: accountUuid,
+                instagram_sender_id: senderId,
+                automation_id: automation.id,
+                content_text: String(messageText).trim(),
+              },
+              { onConflict: "instagram_account_id,instagram_sender_id" }
+            );
+          } catch (_) {
+            /* ignore */
+          }
+          try {
+            await sendDmWithQuickReply(accountRow.instagram_business_id, accountRow.access_token, senderId, "Follow us, then tap below:", [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
+            console.log("[webhook] Follow now button sent");
+          } catch (_) {
+            /* ignore */
+          }
+          if (followUp && String(followUpMessage).trim()) {
+            try {
+              await sendPrivateReply(accountRow.instagram_business_id, accountRow.access_token, commentId, String(followUpMessage).trim());
+              console.log("[webhook] follow-up (reminder) sent");
+            } catch (_) {
+              /* ignore */
+            }
+          }
+          try {
+            await supabase.from("analytics").insert({
+              user_id: automation.user_id ?? null,
+              instagram_account_id: accountUuid,
+              automation_id: automation.id,
+              event_type: "message_sent",
+            });
+          } catch (_) {
+            /* ignore */
+          }
+          try {
+            await saveLeadAndConversation(supabase, {
+              user_id: automation.user_id,
+              instagram_account_id: accountUuid,
+              instagram_business_id: accountRow.instagram_business_id,
+              automation_id: automation.id,
+              sender_id: senderId,
+              sender_username: commentPayload?.fromUsername ?? null,
+              sender_profile_picture: commentPayload?.fromProfilePicture ?? null,
+              sender_full_name: commentPayload?.fromFullName ?? null,
+              incoming_text: text,
+              outgoing_text: followRequestText,
+              source: "comment",
+            });
+          } catch (_) {
+            /* ignore */
+          }
+        }
+        continue;
+      }
       const parts: string[] = [];
-      if (askToFollow && askToFollowText.trim()) parts.push(askToFollowText.trim());
       if (openingMessage && openingMessageText.trim()) parts.push(openingMessageText.trim());
       parts.push(String(messageText).trim());
       const mainDmText = parts.join("\n\n");
@@ -253,14 +365,14 @@ async function triggerAutomation(
             source: "comment",
           });
         } catch (_) {
-          /* ignore lead save errors */
+          /* ignore */
         }
       }
       continue;
     }
 
     if (automation.flows?.[0]) {
-      await executeFlow(supabase, automation.flows[0], senderId, commentId, accountUuid);
+      await executeFlow(supabase, automation.flows[0], senderId, commentId ?? undefined, accountUuid);
     }
   }
   } catch (e) {
@@ -272,7 +384,7 @@ type LeadConversationPayload = {
   user_id: string;
   instagram_account_id: string;
   instagram_business_id: string;
-  automation_id: string;
+  automation_id?: string | null;
   sender_id: string;
   sender_username: string | null;
   sender_profile_picture?: string | null;
@@ -319,6 +431,69 @@ async function saveLeadAndConversation(supabase: any, p: LeadConversationPayload
       source: p.source,
     },
   ]);
+}
+
+async function sendDmWithQuickReply(
+  igBusinessId: string,
+  accessToken: string,
+  recipientUserId: string,
+  text: string,
+  quickReplies: Array<{ title: string; payload: string }>
+): Promise<boolean> {
+  const url = (host: string) => `${host}/v21.0/${igBusinessId}/messages`;
+  const message: { text: string; quick_replies?: Array<{ content_type: string; title: string; payload: string }> } = { text };
+  if (quickReplies.length) {
+    message.quick_replies = quickReplies.map((q) => ({ content_type: "text", title: q.title, payload: q.payload }));
+  }
+  const body = JSON.stringify({ recipient: { id: recipientUserId }, message });
+  const opts = {
+    method: "POST" as const,
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${accessToken}` },
+    body
+  };
+  try {
+    let res = await fetch(url("https://graph.instagram.com"), opts);
+    if (!res.ok && res.status >= 400) {
+      res = await fetch(url("https://graph.facebook.com"), opts);
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("[webhook] sendDmWithQuickReply failed:", res.status, err);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("[webhook] sendDmWithQuickReply error:", e);
+    return false;
+  }
+}
+
+async function sendDmToUser(igBusinessId: string, accessToken: string, recipientUserId: string, text: string): Promise<boolean> {
+  const url = (host: string) => `${host}/v21.0/${igBusinessId}/messages`;
+  const body = JSON.stringify({
+    recipient: { id: recipientUserId },
+    message: { text }
+  });
+  const opts = {
+    method: "POST" as const,
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${accessToken}` },
+    body
+  };
+  try {
+    let res = await fetch(url("https://graph.instagram.com"), opts);
+    if (!res.ok && res.status >= 400) {
+      res = await fetch(url("https://graph.facebook.com"), opts);
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("[webhook] sendDmToUser failed:", res.status, err);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("[webhook] sendDmToUser error:", e);
+    return false;
+  }
 }
 
 async function postPublicReply(commentId: string, message: string, accessToken: string): Promise<void> {
