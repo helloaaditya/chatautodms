@@ -624,7 +624,7 @@ async function sendDmWithFollowButtons(
   if (profileUrl) {
     buttons.push({ type: "web_url", url: profileUrl, title: "Visit profile" });
   }
-  buttons.push({ type: "postback", title: "Follow now", payload: "FOLLOW_CTA" });
+  buttons.push({ type: "postback", title: "I'm following✅", payload: "FOLLOW_CTA" });
   const templateBody = JSON.stringify({
     recipient: { id: recipientUserId },
     message: {
