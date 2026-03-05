@@ -138,32 +138,26 @@ async function triggerAutomation(
 
   if (type === "dm") {
     const normalized = text.trim().toLowerCase();
-    const isFollowCta = normalized === "follow_cta";
+    const isFollowCta = normalized === "follow_cta" || normalized === "follow now";
     const doneKeywords = ["done", "followed", "yes", "ok", "follow"];
     const isDone = isFollowCta || doneKeywords.some((kw) => normalized === kw || normalized.includes(kw));
     if (isDone) {
-      const { data: pendingList } = await supabase
+      const { data: pendingList, error: pendingErr } = await supabase
         .from("pending_dm_content")
-        .select("id, content_text, user_id, automation_id, follow_reminder_sent, sender_full_name")
+        .select("id, content_text, user_id, automation_id, sender_full_name")
         .eq("instagram_account_id", accountUuid)
         .eq("instagram_sender_id", senderId)
         .limit(1);
+      if (pendingErr) {
+        console.log("[webhook] pending_dm_content lookup error", { error: pendingErr.message, accountUuid, senderId });
+      }
       const pending = Array.isArray(pendingList) ? pendingList[0] : null;
       if (pending?.content_text) {
-        const alreadyReminded = !!pending.follow_reminder_sent;
-        if (!alreadyReminded) {
-          const reminderText = "Please follow our account first. Once you've followed, tap the Follow now button again to get the content.";
-          const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText);
-          if (sent) {
-            await supabase.from("pending_dm_content").update({ follow_reminder_sent: true }).eq("id", pending.id);
-            console.log("[webhook] sent follow reminder (tap again after following)");
-          }
-          return;
-        }
         const name = (pending as { sender_full_name?: string | null }).sender_full_name?.trim();
         const thankYouMessage = name
           ? `Hi ${name}!\n\nThank you! Here's what you asked for:\n\n${pending.content_text}`
           : `Thank you! Here's what you asked for:\n\n${pending.content_text}`;
+        console.log("[webhook] sending main content to user", { senderId, hasName: !!name });
         const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
         if (sent) {
           await supabase.from("pending_dm_content").delete().eq("id", pending.id);
@@ -185,8 +179,13 @@ async function triggerAutomation(
             /* ignore */
           }
           console.log("[webhook] sent pending content after follow confirmation");
+        } else {
+          console.log("[webhook] sendDmToUser failed for content – user may not have messaged within 24h or API error");
         }
         return;
+      }
+      if (isFollowCta || isDone) {
+        console.log("[webhook] no pending_dm_content for sender", { senderId, accountUuid, text: text?.slice(0, 30) });
       }
     }
   }
