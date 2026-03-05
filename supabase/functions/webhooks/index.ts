@@ -144,12 +144,22 @@ async function triggerAutomation(
     if (isDone) {
       const { data: pendingList } = await supabase
         .from("pending_dm_content")
-        .select("id, content_text, user_id, automation_id")
+        .select("id, content_text, user_id, automation_id, follow_reminder_sent")
         .eq("instagram_account_id", accountUuid)
         .eq("instagram_sender_id", senderId)
         .limit(1);
       const pending = Array.isArray(pendingList) ? pendingList[0] : null;
       if (pending?.content_text) {
+        const alreadyReminded = !!pending.follow_reminder_sent;
+        if (!alreadyReminded) {
+          const reminderText = "Please follow our account first. Once you've followed, tap the Follow now button again to get the content.";
+          const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText);
+          if (sent) {
+            await supabase.from("pending_dm_content").update({ follow_reminder_sent: true }).eq("id", pending.id);
+            console.log("[webhook] sent follow reminder (tap again after following)");
+          }
+          return;
+        }
         const thankYouMessage = `Thank you! Here's what you asked for:\n\n${pending.content_text}`;
         const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
         if (sent) {
