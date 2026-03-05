@@ -39,11 +39,20 @@ export const FlowSetup: React.FC = () => {
   const [keywordInput, setKeywordInput] = useState('');
   const [message, setMessage] = useState('');
   const [openingMessage, setOpeningMessage] = useState(false);
+  const [openingMessageText, setOpeningMessageText] = useState('');
   const [publicReply, setPublicReply] = useState(false);
+  const [publicReplyText, setPublicReplyText] = useState('');
   const [askToFollow, setAskToFollow] = useState(false);
+  const [askToFollowText, setAskToFollowText] = useState('');
   const [followUp, setFollowUp] = useState(false);
+  const [followUpMessage, setFollowUpMessage] = useState('');
+  const [messageImageUrl, setMessageImageUrl] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
+  const MAX_IMAGE_MB = 5;
 
   const templateToTriggerType: Record<string, 'dm' | 'comment' | 'mention' | 'first_interaction'> = {
     comment_to_dm: 'comment',
@@ -144,9 +153,14 @@ export const FlowSetup: React.FC = () => {
       setAnyKeyword(!Array.isArray(kw) || kw.length === 0);
       setMessage((cfg.message as string) ?? '');
       setOpeningMessage(!!cfg.openingMessage);
+      setOpeningMessageText((cfg.openingMessageText as string) ?? '');
       setPublicReply(!!cfg.publicReply);
+      setPublicReplyText((cfg.publicReplyText as string) ?? '');
       setAskToFollow(!!cfg.askToFollow);
+      setAskToFollowText((cfg.askToFollowText as string) ?? '');
       setFollowUp(!!cfg.followUp);
+      setFollowUpMessage((cfg.followUpMessage as string) ?? '');
+      setMessageImageUrl(typeof cfg.messageImageUrl === 'string' ? cfg.messageImageUrl : null);
       setLoadingEdit(false);
     })();
     return () => { cancelled = true; };
@@ -173,6 +187,35 @@ export const FlowSetup: React.FC = () => {
     setKeywords(keywords.filter((x) => x !== k));
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      setSaveError('Please choose PNG, JPG, or GIF.');
+      return;
+    }
+    if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+      setSaveError(`Image must be under ${MAX_IMAGE_MB}MB.`);
+      return;
+    }
+    setImageUploading(true);
+    setSaveError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `${user?.id ?? 'anon'}/${Date.now()}.${ext}`;
+      const { data, error } = await supabase.storage.from('automation-assets').upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from('automation-assets').getPublicUrl(data.path);
+      setMessageImageUrl(urlData.publicUrl);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Image upload failed. Create a bucket "automation-assets" in Supabase Storage if needed.');
+    } finally {
+      setImageUploading(false);
+      e.target.value = '';
+    }
+  };
+
   const handleGoLive = async () => {
     if (!template) return;
     setSaveError(null);
@@ -196,9 +239,14 @@ export const FlowSetup: React.FC = () => {
         selectedPostId: postMode === 'specific' ? selectedPostId : null,
         message,
         openingMessage,
+        openingMessageText: openingMessageText.trim() || undefined,
         publicReply,
+        publicReplyText: publicReplyText.trim() || undefined,
         askToFollow,
+        askToFollowText: askToFollowText.trim() || undefined,
         followUp,
+        followUpMessage: followUpMessage.trim() || undefined,
+        messageImageUrl: messageImageUrl || undefined,
       };
       const payload = {
         ...(editId ? { id: editId } : {}),
@@ -458,36 +506,77 @@ export const FlowSetup: React.FC = () => {
               <Plus size={16} /> Add Link
             </button>
           </div>
-          <div className="mt-3 border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-xl p-6 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors cursor-pointer">
-            <ImageUp className="mx-auto text-gray-400 dark:text-gray-500 mb-2" size={28} />
-            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Upload Image</p>
-            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">PNG, JPG, GIF up to 5MB</p>
-          </div>
+          <label className="mt-3 block border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-xl p-6 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors cursor-pointer">
+            <input type="file" accept=".png,.jpg,.jpeg,.gif,image/png,image/jpeg,image/gif" className="hidden" onChange={handleImageUpload} disabled={imageUploading} />
+            {messageImageUrl ? (
+              <div className="relative inline-block">
+                <img src={messageImageUrl} alt="Uploaded" className="max-h-24 rounded-lg object-cover mx-auto" />
+                <button type="button" onClick={() => setMessageImageUrl(null)} className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold hover:bg-red-600">×</button>
+              </div>
+            ) : (
+              <>
+                {imageUploading ? <Loader2 className="mx-auto mb-2 animate-spin text-blue-500" size={28} /> : <ImageUp className="mx-auto text-gray-400 dark:text-gray-500 mb-2" size={28} />}
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Upload Image</p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">PNG, JPG, GIF up to 5MB</p>
+              </>
+            )}
+          </label>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Private replies are text-only; image is saved for your reference.</p>
           <div className="flex items-center justify-between mt-4">
             <span className="text-sm text-gray-700 dark:text-gray-300">Opening message</span>
             <button type="button" role="switch" aria-checked={openingMessage} onClick={() => setOpeningMessage(!openingMessage)} className={`w-10 h-6 rounded-full transition-colors ${openingMessage ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
               <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${openingMessage ? 'translate-x-5' : 'translate-x-1'}`} />
             </button>
           </div>
+          {openingMessage && (
+            <input
+              type="text"
+              placeholder="e.g. Hi! Thanks for commenting."
+              value={openingMessageText}
+              onChange={(e) => setOpeningMessageText(e.target.value.slice(0, 200))}
+              className="mt-2 w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-sm"
+            />
+          )}
         </section>
 
-        {/* 4 Advanced Automations */}
+        {/* 5 Advanced Automations */}
         <section className="mb-8">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-1">4 Advanced Automations</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-1">5 Advanced Automations</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Smart engagement automations</p>
           <div className="space-y-4">
-            {[
-              { label: 'Publicly reply to comments', value: publicReply, set: setPublicReply },
-              { label: 'Ask to follow before sending DM', value: askToFollow, set: setAskToFollow },
-              { label: 'Send follow-up message', value: followUp, set: setFollowUp },
-            ].map(({ label, value, set }) => (
-              <div key={label} className="flex items-center justify-between">
-                <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
-                <button type="button" role="switch" aria-checked={value} onClick={() => set(!value)} className={`w-10 h-6 rounded-full transition-colors ${value ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                  <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${value ? 'translate-x-5' : 'translate-x-1'}`} />
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">Publicly reply to comments</span>
+                <button type="button" role="switch" aria-checked={publicReply} onClick={() => setPublicReply(!publicReply)} className={`w-10 h-6 rounded-full transition-colors ${publicReply ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                  <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${publicReply ? 'translate-x-5' : 'translate-x-1'}`} />
                 </button>
               </div>
-            ))}
+              {publicReply && (
+                <input type="text" placeholder="e.g. Thanks! Check your DMs 👋" value={publicReplyText} onChange={(e) => setPublicReplyText(e.target.value.slice(0, 200))} className="mt-2 w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-sm" />
+              )}
+            </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">Ask to follow before sending DM</span>
+                <button type="button" role="switch" aria-checked={askToFollow} onClick={() => setAskToFollow(!askToFollow)} className={`w-10 h-6 rounded-full transition-colors ${askToFollow ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                  <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${askToFollow ? 'translate-x-5' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              {askToFollow && (
+                <input type="text" placeholder="e.g. Follow us for more!" value={askToFollowText} onChange={(e) => setAskToFollowText(e.target.value.slice(0, 200))} className="mt-2 w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-sm" />
+              )}
+            </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-700 dark:text-gray-300">Send follow-up message</span>
+                <button type="button" role="switch" aria-checked={followUp} onClick={() => setFollowUp(!followUp)} className={`w-10 h-6 rounded-full transition-colors ${followUp ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                  <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${followUp ? 'translate-x-5' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              {followUp && (
+                <textarea placeholder="Follow-up message (sent right after the main DM)" value={followUpMessage} onChange={(e) => setFollowUpMessage(e.target.value.slice(0, 500))} rows={2} className="mt-2 w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-sm resize-none" />
+              )}
+            </div>
           </div>
         </section>
 

@@ -184,21 +184,50 @@ async function triggerAutomation(
     }
 
     const messageText = (config.message as string) ?? "";
+    const openingMessageText = (config.openingMessageText as string) ?? "";
+    const publicReplyText = (config.publicReplyText as string) ?? "";
+    const askToFollowText = (config.askToFollowText as string) ?? "";
+    const followUpMessage = (config.followUpMessage as string) ?? "";
+    const publicReply = !!config.publicReply;
+    const askToFollow = !!config.askToFollow;
+    const openingMessage = !!config.openingMessage;
+    const followUp = !!config.followUp;
 
     if (type === "comment" && commentId) {
       if (!String(messageText).trim()) {
         console.log("[webhook] skip automation (no message in config)", { automationId: automation.id });
         continue;
       }
+      if (publicReply && String(publicReplyText).trim()) {
+        try {
+          await postPublicReply(commentId, String(publicReplyText).trim(), accountRow.access_token);
+          console.log("[webhook] public reply sent");
+        } catch (e) {
+          console.error("[webhook] public reply failed", e);
+        }
+      }
+      const parts: string[] = [];
+      if (askToFollow && askToFollowText.trim()) parts.push(askToFollowText.trim());
+      if (openingMessage && openingMessageText.trim()) parts.push(openingMessageText.trim());
+      parts.push(String(messageText).trim());
+      const mainDmText = parts.join("\n\n");
       console.log("[webhook] sending private reply", { automationId: automation.id, commentId });
       const sent = await sendPrivateReply(
         accountRow.instagram_business_id,
         accountRow.access_token,
         commentId,
-        String(messageText).trim()
+        mainDmText
       );
       if (sent) {
         console.log("[webhook] private reply sent");
+        if (followUp && String(followUpMessage).trim()) {
+          try {
+            await sendPrivateReply(accountRow.instagram_business_id, accountRow.access_token, commentId, String(followUpMessage).trim());
+            console.log("[webhook] follow-up message sent");
+          } catch (_) {
+            /* ignore */
+          }
+        }
         try {
           await supabase.from("analytics").insert({
             user_id: automation.user_id ?? null,
@@ -220,7 +249,7 @@ async function triggerAutomation(
             sender_profile_picture: commentPayload?.fromProfilePicture ?? null,
             sender_full_name: commentPayload?.fromFullName ?? null,
             incoming_text: text,
-            outgoing_text: String(messageText).trim(),
+            outgoing_text: mainDmText,
             source: "comment",
           });
         } catch (_) {
@@ -290,6 +319,18 @@ async function saveLeadAndConversation(supabase: any, p: LeadConversationPayload
       source: p.source,
     },
   ]);
+}
+
+async function postPublicReply(commentId: string, message: string, accessToken: string): Promise<void> {
+  const url = `https://graph.instagram.com/v21.0/${commentId}/replies?message=${encodeURIComponent(message)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as any)?.error?.message ?? `Public reply failed: ${res.status}`);
+  }
 }
 
 async function sendPrivateReply(igBusinessId: string, accessToken: string, commentId: string, text: string): Promise<boolean> {
