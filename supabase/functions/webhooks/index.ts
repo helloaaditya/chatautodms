@@ -212,32 +212,40 @@ async function triggerAutomation(
       }
       if (isFollowCta || isDone) {
         console.log("[webhook] no pending_dm_content for sender, trying fallback from automation", { senderId, accountUuid });
-        const { data: fallbackAuto } = await supabase
+        const { data: fallbackAuto, error: fallbackErr } = await supabase
           .from("automations")
-          .select("id, user_id, config")
+          .select("id, user_id, config, trigger_type")
           .eq("instagram_account_id", accountUuid)
-          .eq("trigger_type", "comment")
           .eq("is_active", true)
-          .limit(5);
+          .limit(10);
+        if (fallbackErr) {
+          console.log("[webhook] fallback automations fetch error", { error: fallbackErr.message });
+        }
         const withAskAndMessage = Array.isArray(fallbackAuto) ? fallbackAuto.find((a: { config?: Record<string, unknown> }) => {
           const c = a.config as Record<string, unknown> | null;
           return c && !!c.askToFollow && String(c.message ?? "").trim();
         }) : null;
-        if (withAskAndMessage?.config && typeof (withAskAndMessage.config as Record<string, unknown>).message === "string") {
+        if (!withAskAndMessage) {
+          console.log("[webhook] fallback: no automation with askToFollow+message found", { count: fallbackAuto?.length ?? 0, configs: (fallbackAuto ?? []).map((a: { id: string; config?: unknown }) => ({ id: a.id, hasAsk: !!(a.config as Record<string, unknown>)?.askToFollow, hasMessage: !!String((a.config as Record<string, unknown>)?.message ?? "").trim() })) });
+        }
+        const contentStr = withAskAndMessage?.config && (withAskAndMessage.config as Record<string, unknown>).message != null
+          ? String((withAskAndMessage.config as Record<string, unknown>).message).trim()
+          : "";
+        if (withAskAndMessage?.config && contentStr) {
           const automationId = (withAskAndMessage as { id: string }).id;
+          console.log("[webhook] fallback: found automation, sending reminder or content", { automationId, senderId });
           const { error: fallbackClaimErr } = await supabase
             .from("automation_sent_log")
             .insert({ automation_id: automationId, trigger_type: "dm_reminder", trigger_id: senderId });
           if (fallbackClaimErr?.code === "23505") {
             console.log("[webhook] skip duplicate fallback reminder; trying to send content (reminder already sent)", { senderId, automationId });
-            const content = String((withAskAndMessage.config as Record<string, unknown>).message).trim();
             const { error: contentClaimErr } = await supabase
               .from("automation_sent_log")
               .insert({ automation_id: automationId, trigger_type: "dm_content", trigger_id: senderId });
             if (contentClaimErr?.code === "23505") {
               console.log("[webhook] skip duplicate fallback content", { senderId, automationId });
-            } else if (!contentClaimErr && content) {
-              const thankYouMessage = `Thank you! Here's what you asked for:\n\n${content}`;
+            } else if (!contentClaimErr && contentStr) {
+              const thankYouMessage = `Thank you! Here's what you asked for:\n\n${contentStr}`;
               const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
               if (sent) {
                 try {
@@ -261,7 +269,6 @@ async function triggerAutomation(
               }
             }
           } else {
-          const content = String((withAskAndMessage.config as Record<string, unknown>).message).trim();
           const reminderText = "Please follow our account first. Tap Visit profile to open our page and follow us, then tap Follow now below to get the content.";
           const profileUsername = (accountRow as { account_name?: string | null }).account_name ?? null;
           const sent = await sendDmWithFollowButtons(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, profileUsername);
@@ -271,7 +278,7 @@ async function triggerAutomation(
               instagram_account_id: accountUuid,
               instagram_sender_id: senderId,
               automation_id: (withAskAndMessage as { id: string }).id,
-              content_text: content,
+              content_text: contentStr,
               reminder_sent_count: 1,
             };
             const { error: upsertErr } = await supabase.from("pending_dm_content").upsert(row, { onConflict: "instagram_account_id,instagram_sender_id" });
@@ -280,6 +287,8 @@ async function triggerAutomation(
               if (insertErr) console.log("[webhook] fallback insert failed", insertErr.message);
             }
             console.log("[webhook] sent follow reminder via fallback (no pending row), created pending for second tap");
+          } else {
+            console.log("[webhook] fallback: sendDmWithFollowButtons failed for sender", { senderId, automationId: (withAskAndMessage as { id: string }).id });
           }
           }
         }
@@ -648,7 +657,7 @@ async function sendDmWithFollowButtons(
   const textWithLink = profileUrl
     ? `${reminderText}\n\nOpen our profile: ${profileUrl}`
     : reminderText;
-  return sendDmWithQuickReply(igBusinessId, accessToken, recipientUserId, textWithLink, [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
+  return sendDmWithQuickReply(igBusinessId, accessToken, recipientUserId, textWithLink, [{ title: "I'm following✅", payload: "FOLLOW_CTA" }]);
 }
 
 async function sendDmToUser(igBusinessId: string, accessToken: string, recipientUserId: string, text: string): Promise<boolean> {
