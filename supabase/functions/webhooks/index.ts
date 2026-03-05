@@ -271,44 +271,59 @@ async function triggerAutomation(
             const automationId = (withAskAndMessage as { id: string }).id;
             console.log("[webhook] fallback: found automation", { automationId, senderId });
 
-            // Try to claim a reminder slot
-            const { error: fallbackClaimErr } = await supabase
+            // Check if we already sent a reminder to this sender for this automation
+            const { data: existingLog } = await supabase
               .from("automation_sent_log")
-              .insert({ automation_id: automationId, trigger_type: "dm_reminder", trigger_id: senderId });
+              .select("id, trigger_type")
+              .eq("automation_id", automationId)
+              .eq("trigger_id", senderId)
+              .in("trigger_type", ["dm_reminder", "dm_content"]);
 
-            if (fallbackClaimErr?.code === "23505") {
-              // Reminder already sent before — now send the actual content
-              console.log("[webhook] fallback: reminder already sent, delivering content now", { senderId, automationId });
-              const { error: contentClaimErr } = await supabase
+            const hasReminder = Array.isArray(existingLog) && existingLog.some((r: { trigger_type: string }) => r.trigger_type === "dm_reminder");
+            const hasContent = Array.isArray(existingLog) && existingLog.some((r: { trigger_type: string }) => r.trigger_type === "dm_content");
+
+            if (hasContent) {
+              // Content was already sent in a previous session — clear the log so they can receive it again
+              // (This handles the case where pending_dm_content was deleted but sent_log was not)
+              console.log("[webhook] fallback: clearing stale dm_content log entry so user can receive content again", { senderId, automationId });
+              await supabase
                 .from("automation_sent_log")
-                .insert({ automation_id: automationId, trigger_type: "dm_content", trigger_id: senderId });
+                .delete()
+                .eq("automation_id", automationId)
+                .eq("trigger_id", senderId)
+                .in("trigger_type", ["dm_reminder", "dm_content"]);
+            }
 
-              if (contentClaimErr?.code === "23505") {
-                console.log("[webhook] skip duplicate fallback content", { senderId, automationId });
-              } else if (!contentClaimErr && contentStr) {
-                const thankYouMessage = `Thank you! Here's what you asked for:\n\n${contentStr}`;
-                const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
-                if (sent) {
-                  try {
-                    await saveLeadAndConversation(supabase, {
-                      user_id: (withAskAndMessage as { user_id: string }).user_id,
-                      instagram_account_id: accountUuid,
-                      instagram_business_id: accountRow.instagram_business_id,
-                      automation_id: automationId,
-                      sender_id: senderId,
-                      sender_username: null,
-                      sender_profile_picture: null,
-                      sender_full_name: null,
-                      incoming_text: text,
-                      outgoing_text: thankYouMessage,
-                      source: "dm",
-                    });
-                  } catch (_) { /* ignore */ }
-                  console.log("[webhook] ✅ sent main content via fallback");
-                }
+            if (!hasReminder || hasContent) {
+              // No reminder sent yet (or we just cleared) — this is a fresh follow tap, deliver content now
+              console.log("[webhook] fallback: delivering content to user", { senderId, automationId });
+              const thankYouMessage = `Thank you! Here's what you asked for:\n\n${contentStr}`;
+              const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
+              if (sent) {
+                // Log it
+                await supabase.from("automation_sent_log").insert({ automation_id: automationId, trigger_type: "dm_content", trigger_id: senderId }).catch(() => {});
+                try {
+                  await saveLeadAndConversation(supabase, {
+                    user_id: (withAskAndMessage as { user_id: string }).user_id,
+                    instagram_account_id: accountUuid,
+                    instagram_business_id: accountRow.instagram_business_id,
+                    automation_id: automationId,
+                    sender_id: senderId,
+                    sender_username: null,
+                    sender_profile_picture: null,
+                    sender_full_name: null,
+                    incoming_text: text,
+                    outgoing_text: thankYouMessage,
+                    source: "dm",
+                  });
+                } catch (_) { /* ignore */ }
+                console.log("[webhook] ✅ sent main content via fallback");
+              } else {
+                console.log("[webhook] fallback: sendDmToUser failed (24h window?)", { senderId });
               }
             } else {
-              // First time — send follow reminder with buttons
+              // Reminder was sent but user hasn't confirmed follow yet — re-send follow buttons
+              console.log("[webhook] fallback: re-sending follow buttons (user hasn't confirmed yet)", { senderId, automationId });
               const reminderText = "Please follow our account first. Tap Visit profile to open our page and follow us, then tap Follow now below to get the content.";
               const profileUsername = (accountRow as { account_name?: string | null }).account_name ?? null;
               const sent = await sendDmWithFollowButtons(
@@ -323,7 +338,7 @@ async function triggerAutomation(
                   user_id: (withAskAndMessage as { user_id: string }).user_id,
                   instagram_account_id: accountUuid,
                   instagram_sender_id: senderId,
-                  automation_id: (withAskAndMessage as { id: string }).id,
+                  automation_id: automationId,
                   content_text: contentStr,
                   reminder_sent_count: 1,
                   follow_reminder_sent: true,
@@ -332,8 +347,7 @@ async function triggerAutomation(
                   .from("pending_dm_content")
                   .upsert(row, { onConflict: "instagram_account_id,instagram_sender_id" });
                 if (upsertErr) {
-                  const { error: insertErr } = await supabase.from("pending_dm_content").insert(row);
-                  if (insertErr) console.log("[webhook] fallback insert failed", insertErr.message);
+                  await supabase.from("pending_dm_content").insert(row).catch((e: Error) => console.log("[webhook] fallback insert failed", e.message));
                 }
                 console.log("[webhook] sent follow reminder via fallback, created pending row");
               } else {
