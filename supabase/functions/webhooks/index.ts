@@ -51,8 +51,7 @@ serve(async (req) => {
     const obj = body.object;
     const hasEntry = Array.isArray(body.entry);
     if (obj !== "instagram" || !hasEntry) {
-      const entryLen = Array.isArray(body.entry) ? body.entry.length : 0;
-      console.log("[webhook] Ignoring payload – object:", obj, "entries:", entryLen);
+      console.log("[webhook] Ignoring payload – object:", obj, "entries:", hasEntry ? body.entry?.length : 0);
     }
 
     if (body.object === "instagram" && Array.isArray(body.entry)) {
@@ -335,6 +334,8 @@ async function triggerAutomation(
             }
           }
         }
+        // ✅ isDone path fully handled — do NOT fall through to automations query
+        return;
       }
     }
 
