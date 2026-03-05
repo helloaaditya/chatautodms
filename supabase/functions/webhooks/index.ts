@@ -121,7 +121,7 @@ async function triggerAutomation(
   // Resolve Instagram business id (from Meta) to our account row UUID (use limit(1) to avoid .single() error when 0 or 2+ rows)
   const { data: accountRows, error: accountError } = await supabase
     .from("instagram_accounts")
-    .select("id, access_token, instagram_business_id")
+    .select("id, access_token, instagram_business_id, account_name")
     .eq("instagram_business_id", igBusinessId)
     .eq("is_active", true)
     .limit(1);
@@ -156,12 +156,9 @@ async function triggerAutomation(
       }
       const pending = Array.isArray(pendingList) ? pendingList[0] : null;
       if (pending?.content_text) {
-        const p = pending as { follow_reminder_sent?: boolean; created_at?: string };
-        const flagReminded = !!p.follow_reminder_sent;
-        const createdMs = p.created_at ? new Date(p.created_at).getTime() : 0;
-        const olderThanMinute = createdMs > 0 && (Date.now() - createdMs) > 60_000;
-        const alreadyReminded = flagReminded || olderThanMinute;
-        console.log("[webhook] pending row", { alreadyReminded, flagReminded, olderThanMinute, id: pending.id });
+        const p = pending as { follow_reminder_sent?: boolean };
+        const alreadyReminded = !!p.follow_reminder_sent;
+        console.log("[webhook] pending row", { alreadyReminded, id: pending.id });
         if (!alreadyReminded) {
           const { error: reminderClaimErr } = await supabase
             .from("automation_sent_log")
@@ -170,8 +167,9 @@ async function triggerAutomation(
             console.log("[webhook] skip duplicate follow reminder", { senderId, automationId: pending.automation_id });
             return;
           }
-          const reminderText = "Please follow our account first. Once you've followed, tap the button below to get the content.";
-          const sent = await sendDmWithQuickReply(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
+          const reminderText = "Please follow our account first. Tap Visit profile to open our page and follow us, then tap Follow now below to get the content.";
+          const profileUsername = (accountRow as { account_name?: string | null }).account_name ?? null;
+          const sent = await sendDmWithFollowButtons(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, profileUsername);
           if (sent) {
             const { error: upErr } = await supabase.from("pending_dm_content").update({ follow_reminder_sent: true }).eq("id", pending.id);
             if (upErr) {
@@ -262,8 +260,9 @@ async function triggerAutomation(
             console.log("[webhook] skip duplicate fallback reminder", { senderId, automationId });
           } else {
           const content = String((withAskAndMessage.config as Record<string, unknown>).message).trim();
-          const reminderText = "Please follow our account first. Once you've followed, tap the button below to get the content.";
-          const sent = await sendDmWithQuickReply(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
+          const reminderText = "Please follow our account first. Tap Visit profile to open our page and follow us, then tap Follow now below to get the content.";
+          const profileUsername = (accountRow as { account_name?: string | null }).account_name ?? null;
+          const sent = await sendDmWithFollowButtons(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, profileUsername);
           if (sent) {
             const row: Record<string, unknown> = {
               user_id: (withAskAndMessage as { user_id: string }).user_id,
@@ -398,8 +397,10 @@ async function triggerAutomation(
             /* ignore */
           }
           try {
-            await sendDmWithQuickReply(accountRow.instagram_business_id, accountRow.access_token, senderId, "Tap the button below:", [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
-            console.log("[webhook] Follow now button sent");
+            const profileUsername = (accountRow as { account_name?: string | null }).account_name ?? null;
+            const btnText = "Tap Visit profile to open our page and follow us, then tap Follow now to get the content.";
+            await sendDmWithFollowButtons(accountRow.instagram_business_id, accountRow.access_token, senderId, btnText, profileUsername);
+            console.log("[webhook] Follow + Visit profile buttons sent");
           } catch (_) {
             /* ignore */
           }
@@ -588,6 +589,58 @@ async function sendDmWithQuickReply(
     console.error("[webhook] sendDmWithQuickReply error:", e);
     return false;
   }
+}
+
+/** Sends follow reminder with "Visit profile" (URL) + "Follow now" (postback) buttons. Falls back to text+link + quick reply if template fails. */
+async function sendDmWithFollowButtons(
+  igBusinessId: string,
+  accessToken: string,
+  recipientUserId: string,
+  reminderText: string,
+  profileUsername: string | null
+): Promise<boolean> {
+  const profileUrl = profileUsername
+    ? `https://www.instagram.com/${encodeURIComponent(profileUsername.replace(/\s+/g, ""))}/`
+    : null;
+  const url = (host: string) => `${host}/v21.0/${igBusinessId}/messages`;
+  const buttons: Array<{ type: string; url?: string; title: string; payload?: string }> = [];
+  if (profileUrl) {
+    buttons.push({ type: "web_url", url: profileUrl, title: "Visit profile" });
+  }
+  buttons.push({ type: "postback", title: "Follow now", payload: "FOLLOW_CTA" });
+  const templateBody = JSON.stringify({
+    recipient: { id: recipientUserId },
+    message: {
+      attachment: {
+        type: "template",
+        payload: {
+          template_type: "button",
+          text: reminderText,
+          buttons,
+        },
+      },
+    },
+  });
+  const opts = {
+    method: "POST" as const,
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${accessToken}` },
+    body: templateBody,
+  };
+  try {
+    let res = await fetch(url("https://graph.instagram.com"), opts);
+    if (!res.ok && res.status >= 400) {
+      res = await fetch(url("https://graph.facebook.com"), opts);
+    }
+    if (res.ok) return true;
+    const err = await res.json().catch(() => ({}));
+    console.warn("[webhook] sendDmWithFollowButtons template failed, falling back to text + quick reply", res.status, (err as { error?: { message?: string } })?.error?.message);
+  } catch (e) {
+    console.warn("[webhook] sendDmWithFollowButtons error, falling back", e);
+  }
+  const textWithLink = profileUrl
+    ? `${reminderText}\n\nOpen our profile: ${profileUrl}`
+    : reminderText;
+  return sendDmWithQuickReply(igBusinessId, accessToken, recipientUserId, textWithLink, [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
 }
 
 async function sendDmToUser(igBusinessId: string, accessToken: string, recipientUserId: string, text: string): Promise<boolean> {
