@@ -11,7 +11,9 @@ import {
   Instagram,
   LogOut,
   ChevronRight,
-  LogOut as LogOutIcon
+  Sun,
+  Moon,
+  HelpCircle
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -28,10 +30,19 @@ const sidebarLinks = [
   { name: 'Settings', path: '/settings', icon: Settings },
 ];
 
+const THEME_KEY = 'chatautodms-theme';
+
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = React.useState<any>(null);
+  const [dark, setDark] = React.useState(() => {
+    if (typeof window === 'undefined') return false;
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored === 'dark') return true;
+    if (stored === 'light') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
   const isFlowSetup = location.pathname.startsWith('/automations/new');
 
   React.useEffect(() => {
@@ -39,6 +50,26 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       setUser(user);
     });
   }, []);
+
+  React.useEffect(() => {
+    if (dark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [dark]);
+
+  const toggleDark = () => {
+    const next = !dark;
+    setDark(next);
+    if (next) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem(THEME_KEY, 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem(THEME_KEY, 'light');
+    }
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -105,12 +136,38 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <main className="flex-1 overflow-y-auto scroll-smooth">
         <header className="h-16 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md sticky top-0 z-10 flex items-center justify-between px-8">
           <h1 className="text-lg font-semibold">Dashboard</h1>
-          <div className="flex items-center gap-4">
-             {/* Account Selector, Notifications, etc. */}
-             <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-600">
-               <Instagram size={16} className="text-pink-500" />
-               <span>Select Account</span>
-             </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleDark}
+              className="p-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600 transition-colors"
+              title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {dark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-gray-600 dark:text-gray-300" />}
+            </button>
+            <NavLink
+              to="/settings"
+              className={({ isActive }) => `p-2.5 rounded-xl border transition-colors ${isActive ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'}`}
+              title="Settings"
+            >
+              <Settings size={18} />
+            </NavLink>
+            <NavLink
+              to="/connect"
+              className={({ isActive }) => `p-2.5 rounded-xl border transition-colors ${isActive ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'} text-gray-700 dark:text-gray-300`}
+              title="Instagram Accounts"
+            >
+              <Instagram size={18} className="text-pink-500" />
+            </NavLink>
+            <button
+              type="button"
+              className="p-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 transition-colors"
+              title="Help"
+              aria-label="Help"
+            >
+              <HelpCircle size={18} />
+            </button>
           </div>
         </header>
         <div className={isFlowSetup ? 'min-h-full' : 'p-8 max-w-7xl mx-auto'}>

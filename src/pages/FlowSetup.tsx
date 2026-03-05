@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Shuffle, Plus, ImageUp, Play, Loader2, Instagram } from 'lucide-react';
+import { ArrowLeft, Shuffle, Plus, ImageUp, Play, Loader2, Instagram, Heart, MessageSquare, Bookmark, MessageCircle, Share2, Home, Search, Video, User, MoreVertical, ChevronLeft } from 'lucide-react';
 import { TEMPLATES, type TemplateId } from '../components/TemplatesModal';
 import { supabase } from '../api/supabase';
 import type { InstagramAccount } from '../types';
+import phoneMockup from '../assets/apple-iphone-air-2025-medium.png';
 
 const MAX_MESSAGE_LENGTH = 1000;
 
@@ -310,164 +311,111 @@ export const FlowSetup: React.FC = () => {
   const previewPostImage = selectedPost?.media_url || selectedPost?.thumbnail_url;
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)]">
-      {/* Preview - fixed width so it doesn't shrink */}
-      <div className="w-[380px] min-w-[380px] flex-shrink-0 flex flex-col items-center justify-start pt-8 pb-8 pl-6 pr-6 border-r border-gray-200 dark:border-gray-700 overflow-auto bg-gray-50 dark:bg-gray-900/50">
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+      {/* Preview - fixed, not scrollable */}
+      <div className="w-[380px] min-w-[380px] flex-shrink-0 flex flex-col items-center justify-start pt-8 pb-8 pl-6 pr-6 border-r border-gray-200 dark:border-gray-700 overflow-hidden bg-gray-50 dark:bg-gray-900/50">
         <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-4 w-full">Preview</h3>
-        <div className="bg-gray-100 dark:bg-gray-800 rounded-[2.5rem] p-3 shadow-xl border border-gray-200 dark:border-gray-600 flex-shrink-0">
-          <div className="w-[280px] bg-white dark:bg-gray-900 rounded-[2rem] overflow-hidden border border-gray-200 dark:border-gray-700 shadow-inner">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-              <span className="text-gray-400">←</span>
-              <span className="font-semibold text-sm truncate max-w-[140px]">{selectedAccount ? (selectedAccount.account_name || 'Posts') : 'Posts'}</span>
-              <span className="text-gray-400">⋯</span>
+        <div className="relative flex-shrink-0 w-[280px]">
+          <img src={phoneMockup} alt="Phone" className="w-full h-auto block" />
+          <div className="absolute top-[7%] left-[6%] right-[6%] bottom-[3%] bg-white dark:bg-gray-900 rounded-[1.25rem] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+              <span className="text-gray-400 text-xs"><ChevronLeft size={24} className="text-gray-200" /></span>
+              <span className="font-bold text-xxl truncate max-w-[100px]">{selectedAccount ? (selectedAccount.account_name || 'Posts') : 'Posts'}</span>
+              <span className="text-gray-400 text-xs"><MoreVertical size={16} className="text-gray-200" /></span>
             </div>
-            <div className="p-2">
-              <div className="flex items-center gap-2 pb-2">
+            <div className="p-1.5 flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div className="flex items-center gap-1.5 pb-1.5 flex-shrink-0">
                 {selectedAccount?.profile_picture ? (
-                  <img src={selectedAccount.profile_picture} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                  <img src={selectedAccount.profile_picture} alt="" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex-shrink-0 flex items-center justify-center">
-                    <Instagram size={14} className="text-white" />
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex-shrink-0 flex items-center justify-center">
+                    <Instagram size={10} className="text-white" />
                   </div>
                 )}
-                <span className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                <span className="text-[10px] font-semibold text-gray-900 dark:text-white truncate">
                   {selectedAccount ? (selectedAccount.account_name || 'Instagram') : 'Select account'}
                 </span>
               </div>
-              <div className="aspect-square bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
+              <div className="flex-1 min-h-[140px] bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center overflow-hidden">
                 {previewPostImage ? (
                   <img src={previewPostImage} alt="Post" className="w-full h-full object-cover" />
                 ) : (
-                  <p className="text-gray-500 dark:text-gray-400 text-sm text-center px-4">You haven&apos;t picked a post yet</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-[10px] text-center px-2">You haven&apos;t picked a post yet</p>
                 )}
               </div>
-              <div className="flex gap-6 pt-2 pb-2">
-                <span className="text-gray-400">♡</span>
-                <span className="text-gray-400">💬</span>
-                <span className="text-gray-400">✈</span>
-                <span className="text-gray-400">🔖</span>
+              {/* Like, Comment, Share, Save - bold, big, aligned */}
+              <div className="flex items-center justify-between pt-2 pb-2 px-0.5 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <Heart size={18} className="text-red-500 fill-red-500 flex-shrink-0" />
+                  <MessageCircle size={18} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+                  <Share2 size={18} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+                </div>
+                <Bookmark size={18} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
               </div>
             </div>
-            <div className="h-12 flex items-center justify-around border-t border-gray-100 dark:border-gray-800 text-gray-400">
-              <span>⌂</span><span>🔍</span><span>+</span><span>▶</span><span>👤</span>
+            {/* Instagram bottom nav bar - stuck to mobile bottom */}
+            <div className="flex items-center justify-around py-2.5 px-1 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex-shrink-0 mt-auto">
+              <Home size={22} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+              <Search size={22} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+              <Plus size={22} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+              <Video size={20} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+              <User size={22} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Setup panel */}
-      <div className="w-[420px] flex-shrink-0 overflow-y-auto bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 p-6">
-        <button
-          onClick={() => navigate('/automations')}
-          className="flex items-center gap-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 text-sm mb-6"
-        >
-          <ArrowLeft size={16} /> Back
-        </button>
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Setup {template.title}</h1>
+      {/* Setup panel - two columns: form (scrollable) + Select a Post (separate, scrollable) */}
+      <div className="flex-1 min-w-0 flex overflow-hidden bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700">
+        {/* Left column: form (account, keywords, message, advanced, GO LIVE) */}
+        <div className="w-[400px] flex-shrink-0 min-h-0 overflow-y-auto p-6 border-r border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => navigate('/automations')}
+            className="flex items-center gap-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 text-sm mb-6"
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Setup {template.title}</h1>
 
-        {/* 1 Choose Instagram account (must be the account that owns the post — webhooks use this) */}
-        <section className="mb-8">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">1 Choose Instagram account</h2>
-          {accounts.length === 0 && (
-            <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
-              Connect an account first from <button type="button" onClick={() => navigate('/connect')} className="underline font-medium">Connect</button>.
-            </p>
-          )}
-          {accounts.length > 0 && (
-            <div className="space-y-2">
-              {accounts.map((acc) => {
-                const isSelected = selectedAccountId === acc.id;
-                return (
-                  <button
-                    key={acc.id}
-                    type="button"
-                    onClick={() => setSelectedAccountId(acc.id)}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${isSelected ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-500' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 bg-white dark:bg-gray-800'}`}
-                  >
-                    {acc.profile_picture ? (
-                      <img src={acc.profile_picture} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center flex-shrink-0">
-                        <Instagram size={20} className="text-gray-500 dark:text-gray-400" />
-                      </div>
-                    )}
-                    <span className="font-medium text-gray-900 dark:text-white truncate">{acc.account_name || 'Instagram account'}</span>
-                    <span className="text-xs text-gray-500 truncate">ID: {acc.instagram_business_id}</span>
-                    {isSelected && <span className="ml-auto text-blue-600 dark:text-blue-400 text-xs font-medium">Selected</span>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </section>
+          {/* 1 Choose Instagram account (must be the account that owns the post — webhooks use this) */}
+          <section className="mb-8">
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">1. Choose Instagram account</h2>
+            {accounts.length === 0 && (
+              <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
+                Connect an account first from <button type="button" onClick={() => navigate('/connect')} className="underline font-medium">Connect</button>.
+              </p>
+            )}
+            {accounts.length > 0 && (
+              <div className="space-y-2">
+                {accounts.map((acc) => {
+                  const isSelected = selectedAccountId === acc.id;
+                  return (
+                    <button
+                      key={acc.id}
+                      type="button"
+                      onClick={() => setSelectedAccountId(acc.id)}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${isSelected ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-500' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 bg-white dark:bg-gray-800'}`}
+                    >
+                      {acc.profile_picture ? (
+                        <img src={acc.profile_picture} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center flex-shrink-0">
+                          <Instagram size={20} className="text-gray-500 dark:text-gray-400" />
+                        </div>
+                      )}
+                      <span className="font-medium text-gray-900 dark:text-white truncate">{acc.account_name || 'Instagram account'}</span>
+                      <span className="text-xs text-gray-500 truncate">ID: {acc.instagram_business_id}</span>
+                      {isSelected && <span className="ml-auto text-blue-600 dark:text-blue-400 text-xs font-medium">Selected</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
 
-        {/* 2 Select a Post */}
+          {/* 3 Add Keywords */}
         <section className="mb-8">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">2 Select a Post</h2>
-          <div className="space-y-3">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="radio" name="postMode" checked={postMode === 'specific'} onChange={() => setPostMode('specific')} className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500" />
-              <span className="text-sm font-medium">Specific Post</span>
-            </label>
-            <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">Select from existing posts</p>
-            <label className="flex items-center gap-3 cursor-pointer mt-2">
-              <input type="radio" name="postMode" checked={postMode === 'next'} onChange={() => setPostMode('next')} className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500" />
-              <span className="text-sm font-medium">Next Post</span>
-            </label>
-            <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">Activate on your next post</p>
-          </div>
-          {postMode === 'specific' && (
-            <div className="mt-4">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Choose a Post:</p>
-              {hasAccount === false && (
-                <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">Connect an Instagram account first from Connect.</p>
-              )}
-              {hasAccount === true && !selectedAccountId && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 py-2">Select an Instagram account above.</p>
-              )}
-              {hasAccount === true && selectedAccountId && postsLoading && (
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 py-4">
-                  <Loader2 size={18} className="animate-spin" /> Loading posts…
-                </div>
-              )}
-              {hasAccount === true && selectedAccountId && !postsLoading && postsError && (
-                <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{postsError}</p>
-              )}
-              {hasAccount === true && selectedAccountId && !postsLoading && !postsError && posts.length === 0 && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 py-4">No posts found. Post something on Instagram and try again.</p>
-              )}
-              {hasAccount === true && selectedAccountId && !postsLoading && posts.length > 0 && (
-                <>
-                  <div className="flex gap-2 flex-wrap">
-                    {posts.map((post) => {
-                      const thumb = post.thumbnail_url || post.media_url;
-                      const isSelected = selectedPostId === post.id;
-                      return (
-                        <button
-                          key={post.id}
-                          type="button"
-                          onClick={() => setSelectedPostId(isSelected ? null : post.id)}
-                          className={`w-20 h-20 rounded-lg flex-shrink-0 overflow-hidden border-2 transition-all ${isSelected ? 'border-blue-600 ring-2 ring-blue-200 dark:ring-blue-800' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'}`}
-                        >
-                          {thumb ? (
-                            <img src={thumb} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400 text-xs">Media</div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <button type="button" onClick={fetchPosts} className="mt-2 text-sm text-blue-600 dark:text-blue-400 font-medium hover:underline">Refresh posts</button>
-                </>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* 3 Add Keywords */}
-        <section className="mb-8">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">3 Add Keywords</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">3. Add Keywords</h2>
           <div className="flex items-center justify-between gap-2 mb-3">
             <span className="text-sm text-gray-700 dark:text-gray-300">Any keyword</span>
             <button type="button" role="switch" aria-checked={anyKeyword} onClick={() => setAnyKeyword(!anyKeyword)} className={`w-10 h-6 rounded-full transition-colors ${anyKeyword ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
@@ -501,7 +449,7 @@ export const FlowSetup: React.FC = () => {
 
         {/* 4 Send DM Message */}
         <section className="mb-8">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">4 Send DM Message</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">4. Send DM Message</h2>
           {askToFollow && (
             <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">When &quot;Ask to follow&quot; is on, this message is sent only after they tap the <strong>Follow now</strong> button in DMs (no typing required).</p>
           )}
@@ -560,7 +508,7 @@ export const FlowSetup: React.FC = () => {
 
         {/* 5 Advanced Automations */}
         <section className="mb-8">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-1">5 Advanced Automations</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-1">5. Advanced Automations</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Smart engagement automations</p>
           <div className="space-y-4">
             <div>
@@ -613,6 +561,73 @@ export const FlowSetup: React.FC = () => {
           {saving ? <Loader2 size={20} className="animate-spin" /> : <Play size={20} fill="currentColor" />}
           {saving ? ' Saving…' : ' GO LIVE'}
         </button>
+        </div>
+
+        {/* Right column: Select a Post only - more space, scrollable */}
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden border-l border-gray-200 dark:border-gray-700">
+          <section className="flex flex-col h-full min-h-0 p-6">
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3 flex-shrink-0">2. Select a Post</h2>
+            <div className="space-y-3 flex-shrink-0">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input type="radio" name="postMode" checked={postMode === 'specific'} onChange={() => setPostMode('specific')} className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500" />
+                <span className="text-sm font-medium">Specific Post</span>
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">Select from existing posts</p>
+              <label className="flex items-center gap-3 cursor-pointer mt-2">
+                <input type="radio" name="postMode" checked={postMode === 'next'} onChange={() => setPostMode('next')} className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500" />
+                <span className="text-sm font-medium">Next Post</span>
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 ml-6">Activate on your next post</p>
+            </div>
+            {postMode === 'specific' && (
+              <div className="mt-4 flex-1 min-h-0 flex flex-col">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex-shrink-0">Choose a Post:</p>
+                {hasAccount === false && (
+                  <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 flex-shrink-0">Connect an Instagram account first from Connect.</p>
+                )}
+                {hasAccount === true && !selectedAccountId && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 py-2 flex-shrink-0">Select an Instagram account above.</p>
+                )}
+                {hasAccount === true && selectedAccountId && postsLoading && (
+                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 py-4 flex-shrink-0">
+                    <Loader2 size={18} className="animate-spin" /> Loading posts…
+                  </div>
+                )}
+                {hasAccount === true && selectedAccountId && !postsLoading && postsError && (
+                  <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2 flex-shrink-0">{postsError}</p>
+                )}
+                {hasAccount === true && selectedAccountId && !postsLoading && !postsError && posts.length === 0 && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 py-4 flex-shrink-0">No posts found. Post something on Instagram and try again.</p>
+                )}
+                {hasAccount === true && selectedAccountId && !postsLoading && posts.length > 0 && (
+                  <>
+                    <div className="flex gap-3 flex-wrap overflow-y-auto min-h-0 py-2 flex-1 content-start">
+                      {posts.map((post) => {
+                        const thumb = post.thumbnail_url || post.media_url;
+                        const isSelected = selectedPostId === post.id;
+                        return (
+                          <button
+                            key={post.id}
+                            type="button"
+                            onClick={() => setSelectedPostId(isSelected ? null : post.id)}
+                            className={`w-24 h-24 rounded-xl flex-shrink-0 overflow-hidden border-2 transition-all ${isSelected ? 'border-blue-600 ring-2 ring-blue-200 dark:ring-blue-800' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-600'}`}
+                          >
+                            {thumb ? (
+                              <img src={thumb} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-400 text-xs">Media</div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button type="button" onClick={fetchPosts} className="mt-2 text-sm text-blue-600 dark:text-blue-400 font-medium hover:underline flex-shrink-0">Refresh posts</button>
+                  </>
+                )}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   );
