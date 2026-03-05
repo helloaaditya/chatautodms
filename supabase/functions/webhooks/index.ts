@@ -147,7 +147,7 @@ async function triggerAutomation(
     if (isDone) {
       const { data: pendingList, error: pendingErr } = await supabase
         .from("pending_dm_content")
-        .select("id, content_text, user_id, automation_id, sender_full_name, follow_reminder_sent")
+        .select("id, content_text, user_id, automation_id, sender_full_name, follow_reminder_sent, created_at")
         .eq("instagram_account_id", accountUuid)
         .eq("instagram_sender_id", senderId)
         .limit(1);
@@ -156,8 +156,12 @@ async function triggerAutomation(
       }
       const pending = Array.isArray(pendingList) ? pendingList[0] : null;
       if (pending?.content_text) {
-        const alreadyReminded = !!(pending as { follow_reminder_sent?: boolean }).follow_reminder_sent;
-        console.log("[webhook] pending row", { alreadyReminded, id: pending.id });
+        const p = pending as { follow_reminder_sent?: boolean; created_at?: string };
+        const flagReminded = !!p.follow_reminder_sent;
+        const createdMs = p.created_at ? new Date(p.created_at).getTime() : 0;
+        const olderThanMinute = createdMs > 0 && (Date.now() - createdMs) > 60_000;
+        const alreadyReminded = flagReminded || olderThanMinute;
+        console.log("[webhook] pending row", { alreadyReminded, flagReminded, olderThanMinute, id: pending.id });
         if (!alreadyReminded) {
           const reminderText = "Please follow our account first. Once you've followed, tap the button below to get the content.";
           const sent = await sendDmWithQuickReply(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
@@ -239,20 +243,17 @@ async function triggerAutomation(
           const reminderText = "Please follow our account first. Once you've followed, tap the button below to get the content.";
           const sent = await sendDmWithQuickReply(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
           if (sent) {
-            try {
-              await supabase.from("pending_dm_content").upsert(
-                {
-                  user_id: (withAskAndMessage as { user_id: string }).user_id,
-                  instagram_account_id: accountUuid,
-                  instagram_sender_id: senderId,
-                  automation_id: (withAskAndMessage as { id: string }).id,
-                  content_text: content,
-                  follow_reminder_sent: true,
-                },
-                { onConflict: "instagram_account_id,instagram_sender_id" }
-              );
-            } catch (_) {
-              /* ignore */
+            const row: Record<string, unknown> = {
+              user_id: (withAskAndMessage as { user_id: string }).user_id,
+              instagram_account_id: accountUuid,
+              instagram_sender_id: senderId,
+              automation_id: (withAskAndMessage as { id: string }).id,
+              content_text: content,
+            };
+            const { error: upsertErr } = await supabase.from("pending_dm_content").upsert(row, { onConflict: "instagram_account_id,instagram_sender_id" });
+            if (upsertErr) {
+              const { error: insertErr } = await supabase.from("pending_dm_content").insert(row);
+              if (insertErr) console.log("[webhook] fallback insert failed", insertErr.message);
             }
             console.log("[webhook] sent follow reminder via fallback (no pending row), created pending for second tap");
           }
