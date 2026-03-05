@@ -144,7 +144,7 @@ async function triggerAutomation(
     if (isDone) {
       const { data: pendingList } = await supabase
         .from("pending_dm_content")
-        .select("id, content_text, user_id, automation_id, follow_reminder_sent")
+        .select("id, content_text, user_id, automation_id, follow_reminder_sent, sender_full_name")
         .eq("instagram_account_id", accountUuid)
         .eq("instagram_sender_id", senderId)
         .limit(1);
@@ -160,7 +160,10 @@ async function triggerAutomation(
           }
           return;
         }
-        const thankYouMessage = `Thank you! Here's what you asked for:\n\n${pending.content_text}`;
+        const name = (pending as { sender_full_name?: string | null }).sender_full_name?.trim();
+        const thankYouMessage = name
+          ? `Hi ${name}!\n\nThank you! Here's what you asked for:\n\n${pending.content_text}`
+          : `Thank you! Here's what you asked for:\n\n${pending.content_text}`;
         const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
         if (sent) {
           await supabase.from("pending_dm_content").delete().eq("id", pending.id);
@@ -173,7 +176,7 @@ async function triggerAutomation(
               sender_id: senderId,
               sender_username: null,
               sender_profile_picture: null,
-              sender_full_name: null,
+              sender_full_name: name ?? null,
               incoming_text: text,
               outgoing_text: thankYouMessage,
               source: "dm",
@@ -266,7 +269,7 @@ async function triggerAutomation(
         const followRequestParts: string[] = [];
         if (openingMessage && openingMessageText.trim()) followRequestParts.push(openingMessageText.trim());
         if (askToFollowText.trim()) followRequestParts.push(askToFollowText.trim());
-        followRequestParts.push("Tap the Follow now button below to get the content.");
+        followRequestParts.push("Hit the button below to get the content.");
         const followRequestText = followRequestParts.join("\n\n");
         console.log("[webhook] sending follow request (ask to follow)", { automationId: automation.id, commentId });
         const sent = await sendPrivateReply(accountRow.instagram_business_id, accountRow.access_token, commentId, followRequestText);
@@ -279,6 +282,7 @@ async function triggerAutomation(
                 instagram_sender_id: senderId,
                 automation_id: automation.id,
                 content_text: String(messageText).trim(),
+                sender_full_name: commentPayload?.fromFullName ?? null,
               },
               { onConflict: "instagram_account_id,instagram_sender_id" }
             );
@@ -286,7 +290,7 @@ async function triggerAutomation(
             /* ignore */
           }
           try {
-            await sendDmWithQuickReply(accountRow.instagram_business_id, accountRow.access_token, senderId, "Follow us, then tap below:", [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
+            await sendDmWithQuickReply(accountRow.instagram_business_id, accountRow.access_token, senderId, "Tap the button below:", [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
             console.log("[webhook] Follow now button sent");
           } catch (_) {
             /* ignore */
