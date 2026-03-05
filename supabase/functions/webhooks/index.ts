@@ -69,10 +69,18 @@ serve(async (req) => {
 
         // A. Handle Messaging (DMs)
         if (Array.isArray(entry.messaging)) {
-          for (const messageObj of entry.messaging as Array<{ sender?: { id?: string }; message?: { text?: string; quick_reply?: { payload?: string }; is_echo?: boolean }; postback?: { payload?: string; title?: string } }>) {
+          for (const messageObj of entry.messaging as Array<{ sender?: { id?: string }; message?: { text?: string; mid?: string; quick_reply?: { payload?: string }; is_echo?: boolean }; postback?: { payload?: string; title?: string; mid?: string } }>) {
             if (messageObj.message?.is_echo) continue;
             const senderId = messageObj.sender?.id;
             if (!senderId) continue;
+            const eventId = (messageObj.postback as { mid?: string } | undefined)?.mid ?? (messageObj.message as { mid?: string } | undefined)?.mid;
+            if (eventId) {
+              const { error: dedupeErr } = await supabase.from("webhook_event_dedup").insert({ event_id: eventId });
+              if (dedupeErr?.code === "23505") {
+                console.log("[webhook] skip duplicate delivery (already processed)", { eventId: eventId.slice(0, 40) + "…" });
+                continue;
+              }
+            }
             const postbackPayload = messageObj.postback?.payload;
             const quickReplyPayload = messageObj.message?.quick_reply?.payload;
             const messageText = messageObj.message?.text ?? postbackPayload ?? quickReplyPayload;
