@@ -157,11 +157,35 @@ async function triggerAutomation(
       const pending = Array.isArray(pendingList) ? pendingList[0] : null;
       if (pending?.content_text) {
         const alreadyReminded = !!(pending as { follow_reminder_sent?: boolean }).follow_reminder_sent;
+        console.log("[webhook] pending row", { alreadyReminded, id: pending.id });
         if (!alreadyReminded) {
           const reminderText = "Please follow our account first. Once you've followed, tap the button below to get the content.";
           const sent = await sendDmWithQuickReply(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
           if (sent) {
-            await supabase.from("pending_dm_content").update({ follow_reminder_sent: true }).eq("id", pending.id);
+            const { error: upErr } = await supabase.from("pending_dm_content").update({ follow_reminder_sent: true }).eq("id", pending.id);
+            if (upErr) {
+              await supabase.from("pending_dm_content").delete().eq("id", pending.id);
+              const insertPayload = {
+                user_id: pending.user_id,
+                instagram_account_id: accountUuid,
+                instagram_sender_id: senderId,
+                automation_id: pending.automation_id,
+                content_text: pending.content_text,
+                sender_full_name: (pending as { sender_full_name?: string | null }).sender_full_name ?? null,
+                follow_reminder_sent: true,
+              };
+              const { error: inErr } = await supabase.from("pending_dm_content").insert(insertPayload);
+              if (inErr) {
+                await supabase.from("pending_dm_content").insert({
+                  user_id: pending.user_id,
+                  instagram_account_id: accountUuid,
+                  instagram_sender_id: senderId,
+                  automation_id: pending.automation_id,
+                  content_text: pending.content_text,
+                  sender_full_name: (pending as { sender_full_name?: string | null }).sender_full_name ?? null,
+                });
+              }
+            }
             console.log("[webhook] sent follow reminder with button (tap again after following)");
           }
           return;
