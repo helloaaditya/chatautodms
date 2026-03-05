@@ -147,7 +147,7 @@ async function triggerAutomation(
     if (isDone) {
       const { data: pendingList, error: pendingErr } = await supabase
         .from("pending_dm_content")
-        .select("id, content_text, user_id, automation_id, sender_full_name, follow_reminder_sent, created_at")
+        .select("id, content_text, user_id, automation_id, sender_full_name, follow_reminder_sent, reminder_sent_count, created_at")
         .eq("instagram_account_id", accountUuid)
         .eq("instagram_sender_id", senderId)
         .limit(1);
@@ -156,46 +156,18 @@ async function triggerAutomation(
       }
       const pending = Array.isArray(pendingList) ? pendingList[0] : null;
       if (pending?.content_text) {
-        const p = pending as { follow_reminder_sent?: boolean };
-        const alreadyReminded = !!p.follow_reminder_sent;
-        console.log("[webhook] pending row", { alreadyReminded, id: pending.id });
-        if (!alreadyReminded) {
-          const { error: reminderClaimErr } = await supabase
-            .from("automation_sent_log")
-            .insert({ automation_id: pending.automation_id, trigger_type: "dm_reminder", trigger_id: senderId });
-          if (reminderClaimErr?.code === "23505") {
-            console.log("[webhook] skip duplicate follow reminder", { senderId, automationId: pending.automation_id });
-            return;
-          }
+        const p = pending as { follow_reminder_sent?: boolean; reminder_sent_count?: number | null };
+        const count = p.reminder_sent_count ?? (p.follow_reminder_sent ? 1 : 0);
+        const readyForContent = count >= 2;
+        console.log("[webhook] pending row", { reminder_sent_count: count, readyForContent, id: pending.id });
+        if (!readyForContent) {
           const reminderText = "Please follow our account first. Tap Visit profile to open our page and follow us, then tap Follow now below to get the content.";
           const profileUsername = (accountRow as { account_name?: string | null }).account_name ?? null;
           const sent = await sendDmWithFollowButtons(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, profileUsername);
           if (sent) {
-            const { error: upErr } = await supabase.from("pending_dm_content").update({ follow_reminder_sent: true }).eq("id", pending.id);
-            if (upErr) {
-              await supabase.from("pending_dm_content").delete().eq("id", pending.id);
-              const insertPayload = {
-                user_id: pending.user_id,
-                instagram_account_id: accountUuid,
-                instagram_sender_id: senderId,
-                automation_id: pending.automation_id,
-                content_text: pending.content_text,
-                sender_full_name: (pending as { sender_full_name?: string | null }).sender_full_name ?? null,
-                follow_reminder_sent: true,
-              };
-              const { error: inErr } = await supabase.from("pending_dm_content").insert(insertPayload);
-              if (inErr) {
-                await supabase.from("pending_dm_content").insert({
-                  user_id: pending.user_id,
-                  instagram_account_id: accountUuid,
-                  instagram_sender_id: senderId,
-                  automation_id: pending.automation_id,
-                  content_text: pending.content_text,
-                  sender_full_name: (pending as { sender_full_name?: string | null }).sender_full_name ?? null,
-                });
-              }
-            }
-            console.log("[webhook] sent follow reminder with button (tap again after following)");
+            const newCount = count + 1;
+            await supabase.from("pending_dm_content").update({ follow_reminder_sent: true, reminder_sent_count: newCount }).eq("id", pending.id);
+            console.log("[webhook] sent follow reminder (reminder until they follow), count=" + newCount);
           }
           return;
         }
@@ -257,7 +229,37 @@ async function triggerAutomation(
             .from("automation_sent_log")
             .insert({ automation_id: automationId, trigger_type: "dm_reminder", trigger_id: senderId });
           if (fallbackClaimErr?.code === "23505") {
-            console.log("[webhook] skip duplicate fallback reminder", { senderId, automationId });
+            console.log("[webhook] skip duplicate fallback reminder; trying to send content (reminder already sent)", { senderId, automationId });
+            const content = String((withAskAndMessage.config as Record<string, unknown>).message).trim();
+            const { error: contentClaimErr } = await supabase
+              .from("automation_sent_log")
+              .insert({ automation_id: automationId, trigger_type: "dm_content", trigger_id: senderId });
+            if (contentClaimErr?.code === "23505") {
+              console.log("[webhook] skip duplicate fallback content", { senderId, automationId });
+            } else if (!contentClaimErr && content) {
+              const thankYouMessage = `Thank you! Here's what you asked for:\n\n${content}`;
+              const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
+              if (sent) {
+                try {
+                  await saveLeadAndConversation(supabase, {
+                    user_id: (withAskAndMessage as { user_id: string }).user_id,
+                    instagram_account_id: accountUuid,
+                    instagram_business_id: accountRow.instagram_business_id,
+                    automation_id: automationId,
+                    sender_id: senderId,
+                    sender_username: null,
+                    sender_profile_picture: null,
+                    sender_full_name: null,
+                    incoming_text: text,
+                    outgoing_text: thankYouMessage,
+                    source: "dm",
+                  });
+                } catch (_) {
+                  /* ignore */
+                }
+                console.log("[webhook] sent main content via fallback (no pending row, reminder already sent)");
+              }
+            }
           } else {
           const content = String((withAskAndMessage.config as Record<string, unknown>).message).trim();
           const reminderText = "Please follow our account first. Tap Visit profile to open our page and follow us, then tap Follow now below to get the content.";
@@ -270,6 +272,7 @@ async function triggerAutomation(
               instagram_sender_id: senderId,
               automation_id: (withAskAndMessage as { id: string }).id,
               content_text: content,
+              reminder_sent_count: 1,
             };
             const { error: upsertErr } = await supabase.from("pending_dm_content").upsert(row, { onConflict: "instagram_account_id,instagram_sender_id" });
             if (upsertErr) {
@@ -391,6 +394,7 @@ async function triggerAutomation(
                 content_text: String(messageText).trim(),
                 sender_full_name: commentPayload?.fromFullName ?? null,
                 follow_reminder_sent: false,
+                reminder_sent_count: 0,
               },
               { onConflict: "instagram_account_id,instagram_sender_id" }
             );
@@ -402,9 +406,9 @@ async function triggerAutomation(
             const btnText = "Tap Visit profile to open our page and follow us, then tap Follow now to get the content.";
             const buttonsSent = await sendDmWithFollowButtons(accountRow.instagram_business_id, accountRow.access_token, senderId, btnText, profileUsername);
             if (buttonsSent) {
-              await supabase.from("pending_dm_content").update({ follow_reminder_sent: true }).eq("instagram_account_id", accountUuid).eq("instagram_sender_id", senderId);
+              await supabase.from("pending_dm_content").update({ follow_reminder_sent: true, reminder_sent_count: 1 }).eq("instagram_account_id", accountUuid).eq("instagram_sender_id", senderId);
             }
-            console.log("[webhook] Follow + Visit profile buttons sent");
+            console.log("[webhook] Follow + Visit profile buttons sent (reminder 1/2)");
           } catch (_) {
             /* ignore */
           }
