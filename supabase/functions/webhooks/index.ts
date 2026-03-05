@@ -84,8 +84,10 @@ serve(async (req) => {
 
             if (commentId && senderId) {
               const fromUsername = typeof fromObj?.username === "string" ? fromObj.username : null;
+              const fromProfilePicture = typeof fromObj?.profile_picture === "string" ? fromObj.profile_picture : (typeof (fromObj as any)?.profile_picture_url === "string" ? (fromObj as any).profile_picture_url : null);
+              const fromFullName = typeof fromObj?.name === "string" ? fromObj.name : (typeof (fromObj as any)?.full_name === "string" ? (fromObj as any).full_name : null);
               console.log("[webhook] comment received", { igAccountId, commentId, mediaId, text: commentText?.slice(0, 50) });
-              await triggerAutomation(supabase, igAccountId, senderId, commentText, "comment", { commentId, mediaId, fromUsername });
+              await triggerAutomation(supabase, igAccountId, senderId, commentText, "comment", { commentId, mediaId, fromUsername, fromProfilePicture, fromFullName });
             }
           }
         }
@@ -97,7 +99,7 @@ serve(async (req) => {
   return new Response("Not allowed", { status: 405 });
 });
 
-type CommentPayload = { commentId: string; mediaId: string | null; fromUsername?: string | null };
+type CommentPayload = { commentId: string; mediaId: string | null; fromUsername?: string | null; fromProfilePicture?: string | null; fromFullName?: string | null };
 
 async function triggerAutomation(
   supabase: any,
@@ -215,6 +217,8 @@ async function triggerAutomation(
             automation_id: automation.id,
             sender_id: senderId,
             sender_username: commentPayload?.fromUsername ?? null,
+            sender_profile_picture: commentPayload?.fromProfilePicture ?? null,
+            sender_full_name: commentPayload?.fromFullName ?? null,
             incoming_text: text,
             outgoing_text: String(messageText).trim(),
             source: "comment",
@@ -242,6 +246,8 @@ type LeadConversationPayload = {
   automation_id: string;
   sender_id: string;
   sender_username: string | null;
+  sender_profile_picture?: string | null;
+  sender_full_name?: string | null;
   incoming_text: string;
   outgoing_text: string;
   source: "comment" | "dm";
@@ -254,6 +260,8 @@ async function saveLeadAndConversation(supabase: any, p: LeadConversationPayload
       instagram_account_id: p.instagram_account_id,
       instagram_user_id: p.sender_id,
       username: p.sender_username ?? undefined,
+      full_name: p.sender_full_name ?? undefined,
+      profile_picture: p.sender_profile_picture ?? undefined,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id,instagram_user_id", ignoreDuplicates: false }

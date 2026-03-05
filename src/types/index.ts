@@ -65,6 +65,7 @@ export type Lead = {
   full_name?: string | null;
   email?: string | null;
   phone?: string | null;
+  profile_picture?: string | null;
   tags: string[];
   created_at: string;
   updated_at?: string;

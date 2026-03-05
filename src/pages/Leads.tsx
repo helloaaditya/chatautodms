@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../api/supabase';
-import { Users, MessageSquare, ChevronDown, ChevronRight, Instagram, Loader2 } from 'lucide-react';
+import { Users, MessageSquare, ChevronDown, ChevronRight, Instagram, Loader2, Mail, Phone, User } from 'lucide-react';
 import type { Lead, MessageLog } from '../types';
 
 type LeadWithAccount = Lead & { account_name?: string };
@@ -16,7 +16,7 @@ export const Leads: React.FC = () => {
       setLoading(true);
       const { data: leadsRows, error: leadsErr } = await supabase
         .from('leads')
-        .select('id, user_id, instagram_account_id, instagram_user_id, username, full_name, email, phone, tags, created_at, updated_at')
+        .select('id, user_id, instagram_account_id, instagram_user_id, username, full_name, email, phone, profile_picture, tags, created_at, updated_at')
         .order('updated_at', { ascending: false });
 
       if (leadsErr || !leadsRows?.length) {
@@ -115,16 +115,22 @@ export const Leads: React.FC = () => {
                           </button>
                         </td>
                         <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold">
-                              {(lead.username || lead.instagram_user_id).slice(0, 1).toUpperCase()}
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-purple-500 to-pink-500 flex-shrink-0 flex items-center justify-center text-white text-sm font-bold">
+                              {lead.profile_picture ? (
+                                <img src={lead.profile_picture} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                (lead.username || lead.full_name || lead.instagram_user_id).slice(0, 1).toUpperCase()
+                              )}
                             </div>
                             <div>
-                              <span className="font-medium text-gray-900 dark:text-white">
-                                {lead.username || `@${lead.instagram_user_id.slice(0, 12)}…`}
+                              <span className="font-medium text-gray-900 dark:text-white block">
+                                {lead.full_name || lead.username || `@${lead.instagram_user_id.slice(0, 12)}…`}
                               </span>
-                              {lead.instagram_user_id && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400">ID: {lead.instagram_user_id}</p>
+                              {(lead.username || lead.instagram_user_id) && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {lead.username ? `@${lead.username}` : `ID: ${lead.instagram_user_id}`}
+                                </p>
                               )}
                             </div>
                           </div>
@@ -145,10 +151,51 @@ export const Leads: React.FC = () => {
                       {isExpanded && (
                         <tr>
                           <td colSpan={5} className="bg-gray-50 dark:bg-gray-900/50 p-4">
-                            <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 max-h-80 overflow-y-auto space-y-3">
-                              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                                <MessageSquare size={16} /> Conversation
-                              </h4>
+                            <div className="flex flex-col md:flex-row gap-4">
+                              {/* Lead profile & details */}
+                              <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 w-full md:w-64 flex-shrink-0">
+                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-3">
+                                  <User size={16} /> Lead details
+                                </h4>
+                                <div className="flex flex-col items-center text-center mb-4">
+                                  <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600 flex-shrink-0 flex items-center justify-center text-2xl font-bold text-gray-500 dark:text-gray-400">
+                                    {lead.profile_picture ? (
+                                      <img src={lead.profile_picture} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      (lead.username || lead.full_name || lead.instagram_user_id).slice(0, 1).toUpperCase()
+                                    )}
+                                  </div>
+                                  <p className="font-medium text-gray-900 dark:text-white mt-2">{lead.full_name || '—'}</p>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400">{lead.username ? `@${lead.username}` : '—'}</p>
+                                </div>
+                                <dl className="space-y-2 text-sm">
+                                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                    <span className="text-gray-400 dark:text-gray-500">ID</span>
+                                    <span className="truncate font-mono text-xs">{lead.instagram_user_id}</span>
+                                  </div>
+                                  {lead.email && (
+                                    <div className="flex items-center gap-2">
+                                      <Mail size={14} className="text-gray-400 flex-shrink-0" />
+                                      <a href={`mailto:${lead.email}`} className="text-blue-600 dark:text-blue-400 truncate">{lead.email}</a>
+                                    </div>
+                                  )}
+                                  {lead.phone && (
+                                    <div className="flex items-center gap-2">
+                                      <Phone size={14} className="text-gray-400 flex-shrink-0" />
+                                      <a href={`tel:${lead.phone}`} className="text-blue-600 dark:text-blue-400">{lead.phone}</a>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-700">
+                                    <Instagram size={14} className="text-pink-500 flex-shrink-0" />
+                                    <span>{lead.account_name || 'Instagram'}</span>
+                                  </div>
+                                </dl>
+                              </div>
+                              {/* Conversation */}
+                              <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 flex-1 max-h-80 overflow-y-auto space-y-3">
+                                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                                  <MessageSquare size={16} /> Conversation
+                                </h4>
                               {lead.messages.length === 0 ? (
                                 <p className="text-sm text-gray-500 dark:text-gray-400">No messages in this thread.</p>
                               ) : (
@@ -173,6 +220,7 @@ export const Leads: React.FC = () => {
                                   </div>
                                 ))
                               )}
+                              </div>
                             </div>
                           </td>
                         </tr>
