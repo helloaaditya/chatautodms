@@ -390,6 +390,7 @@ async function triggerAutomation(
                 automation_id: automation.id,
                 content_text: String(messageText).trim(),
                 sender_full_name: commentPayload?.fromFullName ?? null,
+                follow_reminder_sent: false,
               },
               { onConflict: "instagram_account_id,instagram_sender_id" }
             );
@@ -399,7 +400,10 @@ async function triggerAutomation(
           try {
             const profileUsername = (accountRow as { account_name?: string | null }).account_name ?? null;
             const btnText = "Tap Visit profile to open our page and follow us, then tap Follow now to get the content.";
-            await sendDmWithFollowButtons(accountRow.instagram_business_id, accountRow.access_token, senderId, btnText, profileUsername);
+            const buttonsSent = await sendDmWithFollowButtons(accountRow.instagram_business_id, accountRow.access_token, senderId, btnText, profileUsername);
+            if (buttonsSent) {
+              await supabase.from("pending_dm_content").update({ follow_reminder_sent: true }).eq("instagram_account_id", accountUuid).eq("instagram_sender_id", senderId);
+            }
             console.log("[webhook] Follow + Visit profile buttons sent");
           } catch (_) {
             /* ignore */
