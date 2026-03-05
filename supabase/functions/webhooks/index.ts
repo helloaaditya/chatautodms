@@ -87,6 +87,9 @@ serve(async (req) => {
             const mediaId = rawMediaId != null ? String(rawMediaId).trim() || null : null;
 
             if (commentId && senderId) {
+              if (senderId === igAccountId) {
+                continue;
+              }
               const fromUsername = typeof fromObj?.username === "string" ? fromObj.username : null;
               const fromProfilePicture = typeof fromObj?.profile_picture === "string" ? fromObj.profile_picture : (typeof (fromObj as any)?.profile_picture_url === "string" ? (fromObj as any).profile_picture_url : null);
               const fromFullName = typeof fromObj?.name === "string" ? fromObj.name : (typeof (fromObj as any)?.full_name === "string" ? (fromObj as any).full_name : null);
@@ -185,7 +188,26 @@ async function triggerAutomation(
         return;
       }
       if (isFollowCta || isDone) {
-        console.log("[webhook] no pending_dm_content for sender", { senderId, accountUuid, text: text?.slice(0, 30) });
+        console.log("[webhook] no pending_dm_content for sender, trying fallback from automation", { senderId, accountUuid });
+        const { data: fallbackAuto } = await supabase
+          .from("automations")
+          .select("id, user_id, config")
+          .eq("instagram_account_id", accountUuid)
+          .eq("trigger_type", "comment")
+          .eq("is_active", true)
+          .limit(5);
+        const withAskAndMessage = Array.isArray(fallbackAuto) ? fallbackAuto.find((a: { config?: Record<string, unknown> }) => {
+          const c = a.config as Record<string, unknown> | null;
+          return c && !!c.askToFollow && String(c.message ?? "").trim();
+        }) : null;
+        if (withAskAndMessage?.config && typeof (withAskAndMessage.config as Record<string, unknown>).message === "string") {
+          const content = String((withAskAndMessage.config as Record<string, unknown>).message).trim();
+          const thankYouMessage = `Thank you! Here's what you asked for:\n\n${content}`;
+          const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
+          if (sent) {
+            console.log("[webhook] sent main content via fallback (no pending row)");
+          }
+        }
       }
     }
   }
