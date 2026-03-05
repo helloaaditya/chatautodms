@@ -305,25 +305,41 @@ export const FlowSetup: React.FC = () => {
     );
   }
 
+  const selectedAccount = selectedAccountId ? accounts.find((a) => a.id === selectedAccountId) : null;
+  const selectedPost = selectedPostId ? posts.find((p) => p.id === selectedPostId) : null;
+  const previewPostImage = selectedPost?.media_url || selectedPost?.thumbnail_url;
+
   return (
     <div className="flex min-h-[calc(100vh-4rem)]">
-      {/* Preview */}
-      <div className="flex-1 flex flex-col items-center justify-start pt-8 pb-8 pl-8 pr-4 border-r border-gray-200 dark:border-gray-700 overflow-auto">
-        <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-4 w-full">Preview:</h3>
-        <div className="bg-gray-100 dark:bg-gray-800 rounded-[2.5rem] p-3 shadow-xl border border-gray-200 dark:border-gray-600">
-          <div className="w-[280px] bg-white dark:bg-gray-900 rounded-[2rem] overflow-hidden border border-gray-200 dark:border-gray-700">
+      {/* Preview - fixed width so it doesn't shrink */}
+      <div className="w-[380px] min-w-[380px] flex-shrink-0 flex flex-col items-center justify-start pt-8 pb-8 pl-6 pr-6 border-r border-gray-200 dark:border-gray-700 overflow-auto bg-gray-50 dark:bg-gray-900/50">
+        <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-4 w-full">Preview</h3>
+        <div className="bg-gray-100 dark:bg-gray-800 rounded-[2.5rem] p-3 shadow-xl border border-gray-200 dark:border-gray-600 flex-shrink-0">
+          <div className="w-[280px] bg-white dark:bg-gray-900 rounded-[2rem] overflow-hidden border border-gray-200 dark:border-gray-700 shadow-inner">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
               <span className="text-gray-400">←</span>
-              <span className="font-semibold text-sm">Posts</span>
+              <span className="font-semibold text-sm truncate max-w-[140px]">{selectedAccount ? (selectedAccount.account_name || 'Posts') : 'Posts'}</span>
               <span className="text-gray-400">⋯</span>
             </div>
             <div className="p-2">
               <div className="flex items-center gap-2 pb-2">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500" />
-                <span className="text-xs font-semibold">@_.pastel_eris</span>
+                {selectedAccount?.profile_picture ? (
+                  <img src={selectedAccount.profile_picture} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex-shrink-0 flex items-center justify-center">
+                    <Instagram size={14} className="text-white" />
+                  </div>
+                )}
+                <span className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                  {selectedAccount ? (selectedAccount.account_name || 'Instagram') : 'Select account'}
+                </span>
               </div>
-              <div className="aspect-square bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                <p className="text-gray-500 dark:text-gray-400 text-sm text-center px-4">You haven&apos;t picked a post yet</p>
+              <div className="aspect-square bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
+                {previewPostImage ? (
+                  <img src={previewPostImage} alt="Post" className="w-full h-full object-cover" />
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400 text-sm text-center px-4">You haven&apos;t picked a post yet</p>
+                )}
               </div>
               <div className="flex gap-6 pt-2 pb-2">
                 <span className="text-gray-400">♡</span>
