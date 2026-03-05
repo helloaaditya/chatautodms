@@ -346,20 +346,20 @@ export const FlowSetup: React.FC = () => {
                 </span>
               </div>
               <div className="flex-1 min-h-[140px] bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center overflow-hidden">
-                {previewPostImage && !previewImageError ? (
+                {previewPostVideoUrl && !previewImageError ? (
+                  <video
+                    src={previewPostVideoUrl}
+                    poster={previewPostImage || undefined}
+                    className="w-full h-full object-cover"
+                    controls
+                    playsInline
+                    onError={() => setPreviewImageError(true)}
+                  />
+                ) : previewPostImage && !previewImageError ? (
                   <img
                     src={previewPostImage}
                     alt="Post"
                     className="w-full h-full object-cover"
-                    onError={() => setPreviewImageError(true)}
-                  />
-                ) : previewPostVideoUrl && !previewImageError ? (
-                  <video
-                    src={previewPostVideoUrl}
-                    className="w-full h-full object-cover"
-                    controls
-                    playsInline
-                    muted
                     onError={() => setPreviewImageError(true)}
                   />
                 ) : (
