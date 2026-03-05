@@ -163,6 +163,13 @@ async function triggerAutomation(
         const alreadyReminded = flagReminded || olderThanMinute;
         console.log("[webhook] pending row", { alreadyReminded, flagReminded, olderThanMinute, id: pending.id });
         if (!alreadyReminded) {
+          const { error: reminderClaimErr } = await supabase
+            .from("automation_sent_log")
+            .insert({ automation_id: pending.automation_id, trigger_type: "dm_reminder", trigger_id: senderId });
+          if (reminderClaimErr?.code === "23505") {
+            console.log("[webhook] skip duplicate follow reminder", { senderId, automationId: pending.automation_id });
+            return;
+          }
           const reminderText = "Please follow our account first. Once you've followed, tap the button below to get the content.";
           const sent = await sendDmWithQuickReply(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
           if (sent) {
@@ -198,6 +205,14 @@ async function triggerAutomation(
         const thankYouMessage = name
           ? `Hi ${name}!\n\nThank you! Here's what you asked for:\n\n${pending.content_text}`
           : `Thank you! Here's what you asked for:\n\n${pending.content_text}`;
+        const { error: contentClaimErr } = await supabase
+          .from("automation_sent_log")
+          .insert({ automation_id: pending.automation_id, trigger_type: "dm_content", trigger_id: senderId });
+        if (contentClaimErr?.code === "23505") {
+          console.log("[webhook] skip duplicate main content", { senderId, automationId: pending.automation_id });
+          await supabase.from("pending_dm_content").delete().eq("id", pending.id);
+          return;
+        }
         console.log("[webhook] sending main content to user", { senderId, hasName: !!name });
         const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
         if (sent) {
@@ -239,6 +254,13 @@ async function triggerAutomation(
           return c && !!c.askToFollow && String(c.message ?? "").trim();
         }) : null;
         if (withAskAndMessage?.config && typeof (withAskAndMessage.config as Record<string, unknown>).message === "string") {
+          const automationId = (withAskAndMessage as { id: string }).id;
+          const { error: fallbackClaimErr } = await supabase
+            .from("automation_sent_log")
+            .insert({ automation_id: automationId, trigger_type: "dm_reminder", trigger_id: senderId });
+          if (fallbackClaimErr?.code === "23505") {
+            console.log("[webhook] skip duplicate fallback reminder", { senderId, automationId });
+          } else {
           const content = String((withAskAndMessage.config as Record<string, unknown>).message).trim();
           const reminderText = "Please follow our account first. Once you've followed, tap the button below to get the content.";
           const sent = await sendDmWithQuickReply(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
@@ -256,6 +278,7 @@ async function triggerAutomation(
               if (insertErr) console.log("[webhook] fallback insert failed", insertErr.message);
             }
             console.log("[webhook] sent follow reminder via fallback (no pending row), created pending for second tap");
+          }
           }
         }
       }

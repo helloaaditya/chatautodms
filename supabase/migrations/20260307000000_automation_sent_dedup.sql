@@ -8,13 +8,21 @@ CREATE TABLE IF NOT EXISTS public.automation_sent_log (
 );
 
 COMMENT ON TABLE public.automation_sent_log IS 'Idempotency: one auto-DM per (automation, comment) or per (automation, sender) within cooldown.';
-COMMENT ON COLUMN public.automation_sent_log.trigger_type IS 'comment | dm';
-COMMENT ON COLUMN public.automation_sent_log.trigger_id IS 'comment_id for comment trigger, instagram_sender_id for dm trigger';
+COMMENT ON COLUMN public.automation_sent_log.trigger_type IS 'comment | dm_reminder | dm_content';
+COMMENT ON COLUMN public.automation_sent_log.trigger_id IS 'comment_id for comment, instagram_sender_id for dm_*';
 
 -- One send per comment per automation (comment_id is unique per comment).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_sent_log_comment
   ON public.automation_sent_log (automation_id, trigger_id)
   WHERE trigger_type = 'comment';
+
+-- One follow-reminder and one main-content send per (automation, sender) to prevent duplicate DMs.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_sent_log_dm_reminder
+  ON public.automation_sent_log (automation_id, trigger_id)
+  WHERE trigger_type = 'dm_reminder';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_sent_log_dm_content
+  ON public.automation_sent_log (automation_id, trigger_id)
+  WHERE trigger_type = 'dm_content';
 
 -- Index for dm cooldown check (same sender + automation within last 24h).
 CREATE INDEX IF NOT EXISTS idx_automation_sent_log_dm_lookup
