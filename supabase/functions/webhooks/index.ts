@@ -1,9 +1,5 @@
-// @ts-expect-error Deno URL imports are resolved at runtime by Supabase Edge Functions
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-// @ts-expect-error ESM URL import resolved by Deno at deploy time
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-
-declare const Deno: { env: { get(key: string): string | undefined } };
 
 const WEBHOOK_VERIFY_TOKEN = (Deno.env.get("WEBHOOK_VERIFY_TOKEN") ?? "").trim();
 
@@ -50,14 +46,26 @@ serve(async (req) => {
     }
     const obj = body.object;
     const hasEntry = Array.isArray(body.entry);
-    if (obj !== "instagram" || !hasEntry) {
-      console.log("[webhook] Ignoring payload – object:", obj, "entries:", hasEntry ? body.entry?.length : 0);
+
+    // Log full payload for debugging
+    console.log("[webhook] payload object:", obj, "hasEntry:", hasEntry);
+    console.log("[webhook] full payload:", JSON.stringify(body).slice(0, 1000));
+
+    // Accept both "instagram" and "page" — Meta sometimes sends "page" for IG-connected pages
+    const isValidObject = obj === "instagram" || obj === "page";
+
+    if (!isValidObject || !hasEntry) {
+      console.log("[webhook] Ignoring payload – unrecognised object type or no entries:", obj);
+      return new Response("EVENT_RECEIVED", { status: 200 });
     }
 
-    if (body.object === "instagram" && Array.isArray(body.entry)) {
-      for (const entry of body.entry as Array<Record<string, unknown>>) {
+    for (const entry of body.entry as Array<Record<string, unknown>>) {
         const igAccountId = entry.id as string;
-        if (!igAccountId) continue;
+        if (!igAccountId) {
+          console.log("[webhook] entry has no id, skipping", JSON.stringify(entry).slice(0, 200));
+          continue;
+        }
+        console.log("[webhook] processing entry", { igAccountId, messagingCount: Array.isArray(entry.messaging) ? (entry.messaging as unknown[]).length : 0, changesCount: Array.isArray(entry.changes) ? (entry.changes as unknown[]).length : 0 });
 
         // A. Handle Messaging (DMs)
         if (Array.isArray(entry.messaging)) {
@@ -68,6 +76,7 @@ serve(async (req) => {
             const postbackPayload = messageObj.postback?.payload;
             const quickReplyPayload = messageObj.message?.quick_reply?.payload;
             const messageText = messageObj.message?.text ?? postbackPayload ?? quickReplyPayload;
+            console.log("[webhook] DM received", { senderId, messageText: String(messageText ?? "").slice(0, 80), hasPostback: !!postbackPayload, hasQuickReply: !!quickReplyPayload });
             if (messageText) {
               await triggerAutomation(supabase, igAccountId, senderId, messageText, "dm");
             }
@@ -98,7 +107,6 @@ serve(async (req) => {
           }
         }
       }
-    }
     return new Response("EVENT_RECEIVED", { status: 200 });
   }
 
