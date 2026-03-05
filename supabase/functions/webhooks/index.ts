@@ -262,11 +262,12 @@ async function triggerAutomation(
     }
   }
 
+  const triggerTypes = type === "dm" ? ["dm", "first_interaction"] : [type];
   const { data: automations, error: autoError } = await supabase
     .from("automations")
-    .select("id, user_id, trigger_keywords, config, flows(*)")
+    .select("id, user_id, trigger_keywords, config, trigger_type, flows(*)")
     .eq("instagram_account_id", accountUuid)
-    .eq("trigger_type", type)
+    .in("trigger_type", triggerTypes)
     .eq("is_active", true);
 
   if (autoError) {

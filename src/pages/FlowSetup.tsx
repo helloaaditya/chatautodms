@@ -52,6 +52,7 @@ export const FlowSetup: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [previewImageError, setPreviewImageError] = useState(false);
+  const [anyStory, setAnyStory] = useState(true);
 
   const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
   const MAX_IMAGE_MB = 5;
@@ -154,6 +155,7 @@ export const FlowSetup: React.FC = () => {
       setLoadedTemplate(TEMPLATES.find((t) => t.id === (tid as TemplateId)) ?? TEMPLATES[0]);
       setPostMode((cfg.postMode as 'specific' | 'next') ?? 'specific');
       setSelectedPostId((cfg.selectedPostId as string) ?? null);
+      setAnyStory(cfg.anyStory !== false);
       const kw = cfg.trigger_keywords ?? data.trigger_keywords ?? [];
       setKeywords(Array.isArray(kw) ? kw : []);
       setAnyKeyword(!Array.isArray(kw) || kw.length === 0);
@@ -239,10 +241,10 @@ export const FlowSetup: React.FC = () => {
       }
       const triggerType = templateToTriggerType[template.id] ?? 'comment';
       const name = editId ? undefined : `${template.title} – ${new Date().toLocaleDateString()}`;
+      const isStoryReply = template.id === 'story_reply';
       const config = {
         templateId: template.id,
-        postMode,
-        selectedPostId: postMode === 'specific' ? selectedPostId : null,
+        ...(isStoryReply ? { anyStory } : { postMode, selectedPostId: postMode === 'specific' ? selectedPostId : null }),
         message,
         openingMessage,
         openingMessageText: openingMessageText.trim() || undefined,
@@ -318,6 +320,7 @@ export const FlowSetup: React.FC = () => {
     ? (selectedPost?.thumbnail_url || null)
     : (selectedPost?.media_url || selectedPost?.thumbnail_url || null);
   const previewPostVideoUrl = isVideoPost ? selectedPost?.media_url || null : null;
+  const isStoryReplyFlow = template?.id === 'story_reply';
 
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
@@ -327,68 +330,103 @@ export const FlowSetup: React.FC = () => {
         <div className="relative flex-shrink-0 w-[280px]">
           <img src={phoneMockup} alt="Phone" className="w-full h-auto block" />
           <div className="absolute top-[7%] left-[6%] right-[6%] bottom-[3%] bg-white dark:bg-gray-900 rounded-[1.25rem] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
-              <span className="text-gray-400 text-xs"><ChevronLeft size={24} className="text-gray-200" /></span>
-              <span className="font-bold text-xxl truncate max-w-[100px]">{selectedAccount ? (selectedAccount.account_name || 'Posts') : 'Posts'}</span>
-              <span className="text-gray-400 text-xs"><MoreVertical size={16} className="text-gray-200" /></span>
-            </div>
-            <div className="p-1.5 flex-1 min-h-0 flex flex-col overflow-hidden">
-              <div className="flex items-center gap-1.5 pb-1.5 flex-shrink-0">
-                {selectedAccount?.profile_picture ? (
-                  <img src={selectedAccount.profile_picture} alt="" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
-                ) : (
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex-shrink-0 flex items-center justify-center">
-                    <Instagram size={10} className="text-white" />
-                  </div>
-                )}
-                <span className="text-[10px] font-semibold text-gray-900 dark:text-white truncate">
-                  {selectedAccount ? (selectedAccount.account_name || 'Instagram') : 'Select account'}
-                </span>
-              </div>
-              <div className="flex-1 min-h-[140px] bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center overflow-hidden">
-                {previewPostVideoUrl && !previewImageError ? (
-                  <video
-                    src={previewPostVideoUrl}
-                    poster={previewPostImage || undefined}
-                    className="w-full h-full object-cover"
-                    controls
-                    playsInline
-                    autoPlay
-                    muted
-                    loop
-                    onError={() => setPreviewImageError(true)}
-                  />
-                ) : previewPostImage && !previewImageError ? (
-                  <img
-                    src={previewPostImage}
-                    alt="Post"
-                    className="w-full h-full object-cover"
-                    onError={() => setPreviewImageError(true)}
-                  />
-                ) : (
-                  <p className="text-gray-500 dark:text-gray-400 text-[10px] text-center px-2">
-                    {selectedPost && (!previewPostImage && !previewPostVideoUrl || previewImageError) ? 'Post image unavailable' : "You haven't picked a post yet"}
-                  </p>
-                )}
-              </div>
-              {/* Like, Comment, Share, Save - bold, big, aligned */}
-              <div className="flex items-center justify-between pt-2 pb-2 px-0.5 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
-                <div className="flex items-center gap-3">
-                  <Heart size={18} className="text-red-500 fill-red-500 flex-shrink-0" />
-                  <MessageCircle size={18} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
-                  <Share2 size={18} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+            {isStoryReplyFlow ? (
+              <>
+                <div className="flex items-center justify-between px-2 py-1.5 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+                  <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600 flex-1 max-w-[20%]" />
+                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">Stories</span>
+                  <span className="text-gray-400 text-xs"><MoreVertical size={14} className="text-gray-400" /></span>
                 </div>
-                <Bookmark size={18} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
-              </div>
-            </div>
-            {/* Instagram bottom nav bar - stuck to mobile bottom */}
-            <div className="flex items-center justify-around py-2.5 px-1 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex-shrink-0 mt-auto">
-              <Home size={22} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
-              <Search size={22} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
-              <Plus size={22} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
-              <Video size={20} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
-              <User size={22} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
-            </div>
+                <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-3">
+                  <div className="w-12 h-12 rounded-full border-2 border-gradient-to-r from-amber-400 via-pink-500 to-purple-500 flex items-center justify-center flex-shrink-0 mb-2 ring-2 ring-white dark:ring-gray-800">
+                    {selectedAccount?.profile_picture ? (
+                      <img src={selectedAccount.profile_picture} alt="" className="w-10 h-10 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                        <Instagram size={16} className="text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-semibold text-gray-900 dark:text-white">Your story</span>
+                  <div className="mt-3 w-full flex-1 min-h-[80px] bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                    <p className="text-gray-500 dark:text-gray-400 text-[9px] text-center px-2">Story preview thumbnail</p>
+                  </div>
+                </div>
+                <div className="px-2 py-2 border-t border-gray-100 dark:border-gray-800 flex-shrink-0">
+                  <div className="rounded-full bg-gray-100 dark:bg-gray-700 px-3 py-1.5 text-[10px] text-gray-500 dark:text-gray-400">Send message...</div>
+                </div>
+                <div className="flex items-center justify-around py-2 px-1 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+                  <Home size={18} className="text-gray-900 dark:text-gray-100" />
+                  <Search size={18} className="text-gray-900 dark:text-gray-100" />
+                  <Plus size={18} className="text-gray-900 dark:text-gray-100" />
+                  <Video size={16} className="text-gray-900 dark:text-gray-100" />
+                  <User size={18} className="text-gray-900 dark:text-gray-100" />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+                  <span className="text-gray-400 text-xs"><ChevronLeft size={24} className="text-gray-200" /></span>
+                  <span className="font-bold text-xxl truncate max-w-[100px]">{selectedAccount ? (selectedAccount.account_name || 'Posts') : 'Posts'}</span>
+                  <span className="text-gray-400 text-xs"><MoreVertical size={16} className="text-gray-200" /></span>
+                </div>
+                <div className="p-1.5 flex-1 min-h-0 flex flex-col overflow-hidden">
+                  <div className="flex items-center gap-1.5 pb-1.5 flex-shrink-0">
+                    {selectedAccount?.profile_picture ? (
+                      <img src={selectedAccount.profile_picture} alt="" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex-shrink-0 flex items-center justify-center">
+                        <Instagram size={10} className="text-white" />
+                      </div>
+                    )}
+                    <span className="text-[10px] font-semibold text-gray-900 dark:text-white truncate">
+                      {selectedAccount ? (selectedAccount.account_name || 'Instagram') : 'Select account'}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-h-[140px] bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center overflow-hidden">
+                    {previewPostVideoUrl && !previewImageError ? (
+                      <video
+                        src={previewPostVideoUrl}
+                        poster={previewPostImage || undefined}
+                        className="w-full h-full object-cover"
+                        controls
+                        playsInline
+                        autoPlay
+                        muted
+                        loop
+                        onError={() => setPreviewImageError(true)}
+                      />
+                    ) : previewPostImage && !previewImageError ? (
+                      <img
+                        src={previewPostImage}
+                        alt="Post"
+                        className="w-full h-full object-cover"
+                        onError={() => setPreviewImageError(true)}
+                      />
+                    ) : (
+                      <p className="text-gray-500 dark:text-gray-400 text-[10px] text-center px-2">
+                        {selectedPost && (!previewPostImage && !previewPostVideoUrl || previewImageError) ? 'Post image unavailable' : "You haven't picked a post yet"}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between pt-2 pb-2 px-0.5 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+                    <div className="flex items-center gap-3">
+                      <Heart size={18} className="text-red-500 fill-red-500 flex-shrink-0" />
+                      <MessageCircle size={18} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+                      <Share2 size={18} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+                    </div>
+                    <Bookmark size={18} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-around py-2.5 px-1 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex-shrink-0 mt-auto">
+                  <Home size={22} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+                  <Search size={22} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+                  <Plus size={22} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+                  <Video size={20} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+                  <User size={22} className="text-gray-900 dark:text-gray-100 flex-shrink-0" />
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -443,7 +481,7 @@ export const FlowSetup: React.FC = () => {
 
           {/* 3 Add Keywords */}
         <section className="mb-8">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">3. Add Keywords</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">{isStoryReplyFlow ? '3. Add Keywords' : '3. Add Keywords'}</h2>
           <div className="flex items-center justify-between gap-2 mb-3">
             <span className="text-sm text-gray-700 dark:text-gray-300">Any keyword</span>
             <button type="button" role="switch" aria-checked={anyKeyword} onClick={() => setAnyKeyword(!anyKeyword)} className={`w-10 h-6 rounded-full transition-colors ${anyKeyword ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
@@ -477,7 +515,7 @@ export const FlowSetup: React.FC = () => {
 
         {/* 4 Send DM Message */}
         <section className="mb-8">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">4. Send DM Message</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">{isStoryReplyFlow ? '4. Send DM Message' : '4. Send DM Message'}</h2>
           {askToFollow && (
             <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">When &quot;Ask to follow&quot; is on, this message is sent only after they tap the <strong>Follow now</strong> button in DMs (no typing required).</p>
           )}
@@ -536,9 +574,10 @@ export const FlowSetup: React.FC = () => {
 
         {/* 5 Advanced Automations */}
         <section className="mb-8">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-1">5. Advanced Automations</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-1">{isStoryReplyFlow ? '5. Advanced Automations' : '5. Advanced Automations'}</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Smart engagement automations</p>
           <div className="space-y-4">
+            {!isStoryReplyFlow && (
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-700 dark:text-gray-300">Publicly reply to comments</span>
@@ -550,6 +589,7 @@ export const FlowSetup: React.FC = () => {
                 <input type="text" placeholder="e.g. Thanks! Check your DMs 👋" value={publicReplyText} onChange={(e) => setPublicReplyText(e.target.value.slice(0, 200))} className="mt-2 w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-sm" />
               )}
             </div>
+            )}
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-700 dark:text-gray-300">Ask to follow before sending DM</span>
@@ -591,9 +631,28 @@ export const FlowSetup: React.FC = () => {
         </button>
         </div>
 
-        {/* Right column: Select a Post only - more space, scrollable */}
+        {/* Right column: Select a Post or Select a Story */}
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden border-l border-gray-200 dark:border-gray-700">
           <section className="flex flex-col h-full min-h-0 p-6">
+            {isStoryReplyFlow ? (
+              <>
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3 flex-shrink-0">2. Select a Story</h2>
+                <div className="space-y-3 flex-shrink-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Any story</span>
+                    <button type="button" role="switch" aria-checked={anyStory} onClick={() => setAnyStory(!anyStory)} className={`w-10 h-6 rounded-full transition-colors ${anyStory ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                      <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${anyStory ? 'translate-x-5' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">When someone replies to your story, they’ll get the DM message you set below.</p>
+                </div>
+                <div className="mt-6 flex-1 min-h-0 border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-xl flex items-center justify-center">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No content</p>
+                </div>
+                <button type="button" className="mt-3 text-sm text-blue-600 dark:text-blue-400 font-medium hover:underline flex-shrink-0">Show More</button>
+              </>
+            ) : (
+              <>
             <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3 flex-shrink-0">2. Select a Post</h2>
             <div className="space-y-3 flex-shrink-0">
               <label className="flex items-center gap-3 cursor-pointer">
@@ -656,6 +715,8 @@ export const FlowSetup: React.FC = () => {
                   </>
                 )}
               </div>
+            )}
+              </>
             )}
           </section>
         </div>
