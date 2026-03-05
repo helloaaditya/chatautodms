@@ -24,7 +24,7 @@ In **Instagram** → **Set up Instagram business login** → **Business login se
 
    **Production:**
    ```
-   https://chatautodms.vercel.app/auth/meta/callback
+   https://www.growcreation.in/auth/meta/callback
    ```
 
    **Local dev (optional):**
@@ -34,7 +34,7 @@ In **Instagram** → **Set up Instagram business login** → **Business login se
 
 2. If your dashboard already shows a URI **with** a trailing slash, set in Vercel / `.env.local`:
    ```
-   VITE_META_REDIRECT_URI=https://chatautodms.vercel.app/auth/meta/callback/
+   VITE_META_REDIRECT_URI=https://www.growcreation.in/auth/meta/callback/
    ```
 3. Click **Save**.
 
@@ -63,7 +63,7 @@ In [developers.facebook.com](https://developers.facebook.com/apps) → your app:
 
 3. **OAuth Redirect URIs**
    - In the same **Business login settings**, add:
-     - `https://chatautodms.vercel.app/auth/meta/callback`
+     - `https://www.growcreation.in/auth/meta/callback`
      - For local: `http://localhost:5173/auth/meta/callback` (or your dev port).
    - Save. The redirect URI must match exactly (no trailing slash unless the dashboard shows one).
 
@@ -85,8 +85,8 @@ In [developers.facebook.com](https://developers.facebook.com/apps) → your app:
 - `META_APP_ID`, `META_APP_SECRET` = main app (or same as Instagram if one app).
 - `INSTAGRAM_APP_ID` = **Instagram App ID** from Business login settings.
 - `INSTAGRAM_APP_SECRET` = **Instagram App Secret** from the same section.
-- `META_REDIRECT_URI` = `https://chatautodms.vercel.app/auth/meta/callback`
-- `META_APP_URL` = `https://chatautodms.vercel.app`
+- `META_REDIRECT_URI` = `https://www.growcreation.in/auth/meta/callback`
+- `META_APP_URL` = `https://www.growcreation.in`
 
 If the Instagram App ID/Secret are the same as the main app, you can leave `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET` unset and the function will use `META_APP_ID` / `META_APP_SECRET`.
 
