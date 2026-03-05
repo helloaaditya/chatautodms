@@ -158,11 +158,11 @@ async function triggerAutomation(
       if (pending?.content_text) {
         const alreadyReminded = !!(pending as { follow_reminder_sent?: boolean }).follow_reminder_sent;
         if (!alreadyReminded) {
-          const reminderText = "Please follow our account first. Once you've followed, tap the Follow now button again to get the content.";
-          const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText);
+          const reminderText = "Please follow our account first. Once you've followed, tap the button below to get the content.";
+          const sent = await sendDmWithQuickReply(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
           if (sent) {
             await supabase.from("pending_dm_content").update({ follow_reminder_sent: true }).eq("id", pending.id);
-            console.log("[webhook] sent follow reminder (tap again after following)");
+            console.log("[webhook] sent follow reminder with button (tap again after following)");
           }
           return;
         }
@@ -212,8 +212,8 @@ async function triggerAutomation(
         }) : null;
         if (withAskAndMessage?.config && typeof (withAskAndMessage.config as Record<string, unknown>).message === "string") {
           const content = String((withAskAndMessage.config as Record<string, unknown>).message).trim();
-          const reminderText = "Please follow our account first. Once you've followed, tap the Follow now button again to get the content.";
-          const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText);
+          const reminderText = "Please follow our account first. Once you've followed, tap the button below to get the content.";
+          const sent = await sendDmWithQuickReply(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, [{ title: "Follow now", payload: "FOLLOW_CTA" }]);
           if (sent) {
             try {
               await supabase.from("pending_dm_content").upsert(
