@@ -353,6 +353,9 @@ export const FlowSetup: React.FC = () => {
                     className="w-full h-full object-cover"
                     controls
                     playsInline
+                    autoPlay
+                    muted
+                    loop
                     onError={() => setPreviewImageError(true)}
                   />
                 ) : previewPostImage && !previewImageError ? (
