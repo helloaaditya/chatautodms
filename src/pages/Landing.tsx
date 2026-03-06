@@ -44,7 +44,7 @@ function ParticleField() {
 }
 
 // Stat card with animated counter
-function StatCard({ value, suffix, label, delay, inView }) {
+function StatCard({ value, suffix, label, delay, inView }: { value: number; suffix?: string; label: string; delay: number; inView: boolean }) {
   const count = useCounter(value, 2000, inView);
   return (
     <div className="stat-card" style={{ animationDelay: `${delay}s` }}>
