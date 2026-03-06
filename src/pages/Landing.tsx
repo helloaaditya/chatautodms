@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SITE_NAME, BRAND_NAME, BUSINESS_NAME, CONTACT_EMAIL, LOGO_URL } from '../lib/constants';
+import { OrganizationWebSiteSchema, SoftwareApplicationSchema, FaqSchema } from '../components/SeoHead';
 
 // Animated counter
 function useCounter(end: number, duration = 2000, start = false) {
@@ -62,6 +63,7 @@ export const LandingPage = () => {
   const [activeFeature, setActiveFeature] = useState(0);
   const statsRef = useRef(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [openFaqId, setOpenFaqId] = useState<number | null>(0);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -124,8 +126,22 @@ export const LandingPage = () => {
     },
   ];
 
+  const faqs = [
+    { question: 'What is Grow Creation?', answer: 'Grow Creation is an Instagram automation platform by V2 MARKETING. It helps creators and brands auto-reply to comments, turn comments into private DMs, capture leads, and run automation flows—all from one dashboard. It works only with Instagram (no Facebook).' },
+    { question: 'Is Grow Creation free?', answer: 'Yes. The Starter plan is free forever and includes comment automations, DM auto-replies, basic analytics, and 1 Instagram account. Premium (₹999/month) adds Follow CTA flows, lead capture, and story reply automation. Ultra adds 1:1 onboarding and custom setup.' },
+    { question: 'How does comment-to-DM work?', answer: 'When someone comments on your post (or a chosen post), Grow Creation can automatically send them a direct message. You set the trigger (e.g. keyword or any comment) and the opening message. Optionally, Premium users can ask them to follow before sending the main content.' },
+    { question: 'Do you store my Instagram credentials or password?', answer: 'No. We never see or store your Instagram password. You connect via Meta’s official login (OAuth). We only receive and store the access tokens that Meta gives us, so we can send messages and read comments on your behalf. You can disconnect your account anytime from your dashboard.' },
+    { question: 'Do you sell or share my data?', answer: 'No. We do not sell or share your personal data or Instagram data with third parties for marketing. We use your data only to run your automations and improve our service. See our Privacy Policy for full details.' },
+    { question: 'Is my data secure?', answer: 'Yes. We use industry-standard encryption (HTTPS, secure databases) and follow best practices to keep your account and data safe. Access tokens are stored securely and our systems are built to comply with common security requirements.' },
+    { question: 'Can I connect multiple Instagram accounts?', answer: 'Yes. You can connect up to 10 Instagram accounts to your Grow Creation account. You can switch between accounts anytime from your dashboard.' },
+    { question: 'Where can I contact Grow Creation?', answer: `You can reach us at ${CONTACT_EMAIL}. For support, billing, or partnership inquiries, email us or use the contact link in the footer.` },
+  ];
+
   return (
     <div className="landing-root font-landing">
+      <OrganizationWebSiteSchema />
+      <SoftwareApplicationSchema />
+      <FaqSchema faqs={faqs} />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 
@@ -929,6 +945,49 @@ export const LandingPage = () => {
           .footer-legal { flex-wrap: wrap; gap: 0.75rem; }
         }
 
+        /* ── FAQ ── */
+        .faq-section {
+          padding: 80px clamp(1.5rem, 5vw, 4rem);
+          background: var(--bg);
+          border-top: 1px solid var(--border);
+        }
+        .faq-inner { max-width: 720px; margin: 0 auto; }
+        .faq-section .section-label { margin-bottom: 0.5rem; }
+        .faq-section .section-title { margin-bottom: 2rem; }
+        .faq-list { display: flex; flex-direction: column; gap: 0; }
+        .faq-item {
+          border-bottom: 1px solid var(--border);
+          transition: background 0.2s;
+        }
+        .faq-item:first-child { border-top: 1px solid var(--border); }
+        .faq-q {
+          width: 100%;
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 1.25rem 0;
+          background: none; border: none;
+          font-family: var(--font-body);
+          font-size: 1rem; font-weight: 600; color: var(--text);
+          text-align: left; cursor: pointer;
+          gap: 1rem;
+        }
+        .faq-q:hover { color: var(--pink); }
+        .faq-q span:first-child { flex: 1; }
+        .faq-icon { flex-shrink: 0; transition: transform 0.2s; color: var(--text-muted); }
+        .faq-item.open .faq-icon { transform: rotate(45deg); color: var(--pink); }
+        .faq-a {
+          display: none;
+          padding: 0 0 1.25rem 0;
+          font-size: 0.9375rem; color: var(--text-muted);
+          line-height: 1.7;
+        }
+        .faq-item.open .faq-a { display: block; }
+        .faq-a-inner { padding-right: 2rem; }
+        @media (max-width: 480px) {
+          .faq-section { padding: 60px 1rem; }
+          .faq-q { font-size: 0.9375rem; padding: 1rem 0; }
+          .faq-a { padding-bottom: 1rem; }
+        }
+
         /* ── PARTICLES ── */
         .particle {
           position: absolute; border-radius: 50%;
@@ -965,6 +1024,7 @@ export const LandingPage = () => {
           <li><a href="#product">Product</a></li>
           <li><a href="#features">Features</a></li>
           <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#faq">FAQ</a></li>
           <li><a href="#contact">Contact</a></li>
         </ul>
         <div className="nav-actions">
@@ -983,6 +1043,7 @@ export const LandingPage = () => {
         <a href="#product" onClick={() => setMenuOpen(false)}>Product</a>
         <a href="#features" onClick={() => setMenuOpen(false)}>Features</a>
         <a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a>
+        <a href="#faq" onClick={() => setMenuOpen(false)}>FAQ</a>
         <a href="#contact" onClick={() => setMenuOpen(false)}>Contact</a>
         <Link to="/login" className="btn-ghost" onClick={() => setMenuOpen(false)}>Login</Link>
         <Link to="/login" className="btn-primary" onClick={() => setMenuOpen(false)}>Get Started Free →</Link>
@@ -1212,6 +1273,27 @@ export const LandingPage = () => {
                 >
                   {plan.cta}
                 </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="faq-section" aria-labelledby="faq-title">
+        <div className="faq-inner">
+          <div className="section-label">FAQ</div>
+          <h2 id="faq-title" className="section-title">Frequently asked questions</h2>
+          <div className="faq-list">
+            {faqs.map((faq, i) => (
+              <div key={i} className={`faq-item ${openFaqId === i ? 'open' : ''}`}>
+                <button type="button" className="faq-q" onClick={() => setOpenFaqId(openFaqId === i ? null : i)} aria-expanded={openFaqId === i}>
+                  <span>{faq.question}</span>
+                  <span className="faq-icon" aria-hidden>+</span>
+                </button>
+                <div className="faq-a">
+                  <div className="faq-a-inner">{faq.answer}</div>
+                </div>
               </div>
             ))}
           </div>

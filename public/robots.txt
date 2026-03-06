@@ -1,0 +1,42 @@
+# Grow Creation – https://www.growcreation.in
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /connect
+Disallow: /automations
+Disallow: /analytics
+Disallow: /leads
+Disallow: /billing
+Disallow: /settings
+Disallow: /auth/
+
+# Allow AI/LLM crawlers to index public pages for search and overviews
+User-agent: GPTBot
+Allow: /
+Disallow: /dashboard
+Disallow: /connect
+Disallow: /automations
+Disallow: /analytics
+Disallow: /leads
+Disallow: /billing
+Disallow: /settings
+Disallow: /auth/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /dashboard
+Disallow: /auth/
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+Sitemap: https://www.growcreation.in/sitemap.xml
