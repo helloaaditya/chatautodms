@@ -83,11 +83,10 @@ serve(async (req) => {
             }
             const postbackPayload = messageObj.postback?.payload;
             const quickReplyPayload = messageObj.message?.quick_reply?.payload;
-            const messageText = messageObj.message?.text ?? postbackPayload ?? quickReplyPayload;
-            console.log("[webhook] DM received", { senderId, messageText: String(messageText ?? "").slice(0, 80), hasPostback: !!postbackPayload, hasQuickReply: !!quickReplyPayload });
-            if (messageText) {
-              await triggerAutomation(supabase, igAccountId, senderId, messageText, "dm");
-            }
+            const messageText = (messageObj.message?.text ?? postbackPayload ?? quickReplyPayload ?? "").trim();
+            if (!messageText) continue;
+            console.log("[webhook] DM received", { senderId, messageText: messageText.slice(0, 80), hasPostback: !!postbackPayload, hasQuickReply: !!quickReplyPayload });
+            await triggerAutomation(supabase, igAccountId, senderId, messageText, "dm");
           }
         }
 
@@ -186,27 +185,16 @@ async function triggerAutomation(
         const pending = Array.isArray(pendingList) ? pendingList[0] : null;
 
         if (pending?.content_text) {
-          // NEW FLOW: Never send CTA from DM handler. Only send main content when they tap (dedup = one send).
+          // Send main content on every tap. Same tap deduped by webhook_event_dedup (mid). If they request again (new tap) = send again.
           const name = (pending as { sender_full_name?: string | null }).sender_full_name?.trim();
           const thankYouMessage = name
             ? `Hi ${name}!\n\nThank you! Here's what you asked for:\n\n${pending.content_text}`
             : `Thank you! Here's what you asked for:\n\n${pending.content_text}`;
 
-          const { error: contentClaimErr } = await supabase
-            .from("automation_sent_log")
-            .insert({ automation_id: pending.automation_id, trigger_type: "dm_content", trigger_id: senderId });
-
-          if (contentClaimErr?.code === "23505") {
-            console.log("[webhook] skip duplicate main content", { senderId, automationId: pending.automation_id });
-            await supabase.from("pending_dm_content").delete().eq("id", pending.id);
-            return;
-          }
-
           console.log("[webhook] sending main content (tap I'm following)", { senderId, hasName: !!name });
           const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
 
           if (sent) {
-            await supabase.from("pending_dm_content").delete().eq("id", pending.id);
             try {
               await saveLeadAndConversation(supabase, {
                 user_id: pending.user_id,
@@ -222,7 +210,7 @@ async function triggerAutomation(
                 source: "dm",
               });
             } catch (_) { /* ignore */ }
-            console.log("[webhook] ✅ content delivered");
+            console.log("[webhook] ✅ content delivered (can tap again to receive again)");
           } else {
             console.log("[webhook] sendDmToUser failed (24h window?) — content not sent", { senderId });
           }
@@ -260,35 +248,27 @@ async function triggerAutomation(
 
           if (withAskAndMessage?.config && contentStr) {
             const automationId = (withAskAndMessage as { id: string }).id;
-            console.log("[webhook] fallback: found automation, send content only (no CTA)", { automationId, senderId });
+            console.log("[webhook] fallback: send content (if requesting again, send again)", { automationId, senderId });
 
-            const { error: contentClaimErr } = await supabase
-              .from("automation_sent_log")
-              .insert({ automation_id: automationId, trigger_type: "dm_content", trigger_id: senderId });
-
-            if (contentClaimErr?.code === "23505") {
-              console.log("[webhook] fallback: content already sent, skip", { senderId, automationId });
-            } else {
-              const thankYouMessage = `Thank you! Here's what you asked for:\n\n${contentStr}`;
-              const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
-              if (sent) {
-                try {
-                  await saveLeadAndConversation(supabase, {
-                    user_id: (withAskAndMessage as { user_id: string }).user_id,
-                    instagram_account_id: accountUuid,
-                    instagram_business_id: accountRow.instagram_business_id,
-                    automation_id: automationId,
-                    sender_id: senderId,
-                    sender_username: null,
-                    sender_profile_picture: null,
-                    sender_full_name: null,
-                    incoming_text: text,
-                    outgoing_text: thankYouMessage,
-                    source: "dm",
-                  });
-                } catch (_) { /* ignore */ }
-                console.log("[webhook] fallback: ✅ content sent");
-              }
+            const thankYouMessage = `Thank you! Here's what you asked for:\n\n${contentStr}`;
+            const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
+            if (sent) {
+              try {
+                await saveLeadAndConversation(supabase, {
+                  user_id: (withAskAndMessage as { user_id: string }).user_id,
+                  instagram_account_id: accountUuid,
+                  instagram_business_id: accountRow.instagram_business_id,
+                  automation_id: automationId,
+                  sender_id: senderId,
+                  sender_username: null,
+                  sender_profile_picture: null,
+                  sender_full_name: null,
+                  incoming_text: text,
+                  outgoing_text: thankYouMessage,
+                  source: "dm",
+                });
+              } catch (_) { /* ignore */ }
+              console.log("[webhook] fallback: ✅ content sent");
             }
           }
         }
