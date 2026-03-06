@@ -369,7 +369,16 @@ async function triggerAutomation(
           }
         }
 
-        if (askToFollow) {
+        // Follow CTA is a premium feature — free tier gets main content directly
+        const { data: profileRow } = await supabase
+          .from("profiles")
+          .select("subscription_tier")
+          .eq("id", automation.user_id)
+          .single();
+        const tier = (profileRow?.subscription_tier ?? "free") as string;
+        const canUseFollowCta = tier === "premium" || tier === "ultra_premium";
+
+        if (askToFollow && canUseFollowCta) {
           const followRequestParts: string[] = [];
           if (openingMessage && openingMessageText.trim()) followRequestParts.push(openingMessageText.trim());
           if (askToFollowText.trim()) followRequestParts.push(askToFollowText.trim());

@@ -3,7 +3,7 @@ export type Profile = {
   email: string;
   full_name?: string;
   avatar_url?: string;
-  subscription_tier: 'free' | 'starter' | 'pro' | 'agency';
+  subscription_tier: 'free' | 'starter' | 'pro' | 'agency' | 'premium' | 'ultra_premium';
   subscription_status: 'active' | 'inactive' | 'past_due' | 'canceled';
   stripe_customer_id?: string;
   created_at: string;

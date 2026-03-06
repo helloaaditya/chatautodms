@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Shuffle, Plus, ImageUp, Play, Loader2, Instagram, Heart, MessageSquare, Bookmark, MessageCircle, Share2, Home, Search, Video, User, MoreVertical, ChevronLeft } from 'lucide-react';
+import { ArrowLeft, Shuffle, Plus, ImageUp, Play, Loader2, Instagram, Heart, MessageSquare, Bookmark, MessageCircle, Share2, Home, Search, Video, User, MoreVertical, ChevronLeft, Lock, Crown } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { TEMPLATES, type TemplateId } from '../components/TemplatesModal';
 import { supabase } from '../api/supabase';
 import type { InstagramAccount } from '../types';
@@ -64,6 +65,7 @@ export const FlowSetup: React.FC = () => {
   const [stories, setStories] = useState<InstagramStory[]>([]);
   const [storiesLoading, setStoriesLoading] = useState(false);
   const [storiesError, setStoriesError] = useState<string | null>(null);
+  const [subscriptionTier, setSubscriptionTier] = useState<'free' | 'premium' | 'ultra_premium'>('free');
 
   const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
   const MAX_IMAGE_MB = 5;
@@ -99,6 +101,17 @@ export const FlowSetup: React.FC = () => {
     }
     setAccounts(list);
     setHasAccount(list.length > 0);
+  }, []);
+
+  useEffect(() => {
+    const loadTier = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: p } = await supabase.from('profiles').select('subscription_tier').eq('id', user.id).single();
+      const t = (p?.subscription_tier ?? 'free') as 'free' | 'premium' | 'ultra_premium';
+      setSubscriptionTier(t);
+    };
+    loadTier();
   }, []);
 
   const fetchPosts = useCallback(async () => {
@@ -297,8 +310,8 @@ export const FlowSetup: React.FC = () => {
         openingMessageText: openingMessageText.trim() || undefined,
         publicReply,
         publicReplyText: publicReplyText.trim() || undefined,
-        askToFollow,
-        askToFollowText: askToFollowText.trim() || undefined,
+        askToFollow: subscriptionTier !== 'free' ? askToFollow : false,
+        askToFollowText: subscriptionTier !== 'free' ? (askToFollowText.trim() || undefined) : undefined,
         followUp,
         followUpMessage: followUpMessage.trim() || undefined,
         messageImageUrl: messageImageUrl || undefined,
@@ -653,13 +666,26 @@ export const FlowSetup: React.FC = () => {
             </div>
             )}
             <div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-700 dark:text-gray-300">Ask to follow before sending DM</span>
-                <button type="button" role="switch" aria-checked={askToFollow} onClick={() => setAskToFollow(!askToFollow)} className={`w-10 h-6 rounded-full transition-colors ${askToFollow ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                  <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${askToFollow ? 'translate-x-5' : 'translate-x-1'}`} />
-                </button>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  Ask to follow before sending DM
+                  {subscriptionTier === 'free' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs font-medium">
+                      <Crown size={12} /> Premium
+                    </span>
+                  )}
+                </span>
+                {subscriptionTier === 'free' ? (
+                  <Link to="/billing" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors">
+                    <Lock size={14} /> Upgrade
+                  </Link>
+                ) : (
+                  <button type="button" role="switch" aria-checked={askToFollow} onClick={() => setAskToFollow(!askToFollow)} className={`w-10 h-6 rounded-full transition-colors ${askToFollow ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                    <span className={`block w-4 h-4 rounded-full bg-white shadow transform transition-transform ${askToFollow ? 'translate-x-5' : 'translate-x-1'}`} />
+                  </button>
+                )}
               </div>
-              {askToFollow && (
+              {askToFollow && subscriptionTier !== 'free' && (
                 <input type="text" placeholder="e.g. Follow us for more!" value={askToFollowText} onChange={(e) => setAskToFollowText(e.target.value.slice(0, 200))} className="mt-2 w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-sm" />
               )}
             </div>

@@ -13,6 +13,8 @@ import { Automations } from './pages/Automations';
 import { FlowSetup } from './pages/FlowSetup';
 import { Analytics } from './pages/Analytics';
 import { Leads } from './pages/Leads';
+import { Settings } from './pages/Settings';
+import { Billing } from './pages/Billing';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -72,8 +74,8 @@ const App: React.FC = () => {
       <Route path="/automations/edit/:automationId" element={<ProtectedRoute><FlowSetup /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
       <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
-      <Route path="/billing" element={<ProtectedRoute><div className="p-8">Billing Page (Coming Soon)</div></ProtectedRoute>} />
-      <Route path="/settings" element={<ProtectedRoute><div className="p-8">Settings Page (Coming Soon)</div></ProtectedRoute>} />
+      <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
