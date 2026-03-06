@@ -53,6 +53,17 @@ type AutomationPayload = {
   is_active?: boolean;
 };
 
+const VALID_TIERS = ['free', 'premium', 'ultra_premium'];
+const LEGACY_TIER_MAP: Record<string, string> = { starter: 'premium', pro: 'premium', agency: 'ultra_premium' };
+function normalizeTier(value: unknown): string {
+  if (typeof value === 'string' && VALID_TIERS.includes(value)) return value;
+  const s = typeof value === 'string' ? value.toLowerCase().trim() : '';
+  return LEGACY_TIER_MAP[s] ?? 'free';
+}
+function canUseFollowCta(tier: string): boolean {
+  return tier === 'premium' || tier === 'ultra_premium';
+}
+
 export default async function handler(req: VercelReq, res: VercelRes) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {
@@ -80,6 +91,20 @@ export default async function handler(req: VercelReq, res: VercelRes) {
   const { createClient } = await import('@supabase/supabase-js');
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
+  // Validate trigger_type
+  const validTriggerTypes = ['dm', 'comment', 'mention', 'first_interaction'];
+  if (!body.trigger_type || !validTriggerTypes.includes(body.trigger_type)) {
+    return res.status(400).json({ error: 'Invalid trigger_type' });
+  }
+
+  // Resolve config: strip premium-only options if user is on free tier (server-side enforcement)
+  let config = typeof body.config === 'object' && body.config !== null ? { ...body.config } : {};
+  const { data: profileRow } = await supabase.from('profiles').select('subscription_tier').eq('id', userId).single();
+  const tier = normalizeTier(profileRow?.subscription_tier);
+  if (!canUseFollowCta(tier)) {
+    config = { ...config, askToFollow: false, askToFollowText: undefined };
+  }
+
   const isUpdate = Boolean(body.id);
 
   if (isUpdate) {
@@ -87,8 +112,8 @@ export default async function handler(req: VercelReq, res: VercelRes) {
       .from('automations')
       .update({
         trigger_type: body.trigger_type,
-        trigger_keywords: body.trigger_keywords ?? [],
-        config: body.config ?? {},
+        trigger_keywords: Array.isArray(body.trigger_keywords) ? body.trigger_keywords : [],
+        config,
         is_active: body.is_active ?? true,
       })
       .eq('id', body.id)
@@ -122,9 +147,9 @@ export default async function handler(req: VercelReq, res: VercelRes) {
     instagram_account_id: instagramAccountId,
     name,
     trigger_type: body.trigger_type,
-    trigger_keywords: body.trigger_keywords ?? [],
+    trigger_keywords: Array.isArray(body.trigger_keywords) ? body.trigger_keywords : [],
     is_active: body.is_active ?? true,
-    config: body.config ?? {},
+    config,
   };
 
   const { data, error } = await supabase

@@ -10,14 +10,7 @@ import {
   Check,
   Sparkles,
 } from 'lucide-react';
-
-type SubscriptionTier = 'free' | 'premium' | 'ultra_premium';
-
-const TIER_LABELS: Record<string, string> = {
-  free: 'Free',
-  premium: 'Premium',
-  ultra_premium: 'Ultra Premium',
-};
+import { normalizeTier, TIER_LABELS, type SubscriptionTier } from '../lib/subscription';
 
 export const Settings: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -31,7 +24,7 @@ export const Settings: React.FC = () => {
         return;
       }
       const { data: p } = await supabase.from('profiles').select('email, full_name, subscription_tier, subscription_status').eq('id', user.id).single();
-      setProfile(p ?? { email: user.email ?? '', full_name: user.user_metadata?.full_name, subscription_tier: 'free', subscription_status: 'inactive' });
+      setProfile(p ?? { email: user.email ?? '', full_name: user.user_metadata?.full_name, subscription_tier: 'free', subscription_status: 'inactive' } as { email?: string; full_name?: string; subscription_tier?: string; subscription_status?: string });
       setLoading(false);
     };
     load();
@@ -45,7 +38,7 @@ export const Settings: React.FC = () => {
     );
   }
 
-  const tier = (profile?.subscription_tier ?? 'free') as SubscriptionTier;
+  const tier = normalizeTier(profile?.subscription_tier);
   const isPremium = tier === 'premium' || tier === 'ultra_premium';
   const isUltra = tier === 'ultra_premium';
 
@@ -92,7 +85,7 @@ export const Settings: React.FC = () => {
               tier === 'premium' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
               'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
             }`}>
-              {TIER_LABELS[tier] ?? tier}
+              {TIER_LABELS[tier]}
             </span>
             {profile?.subscription_status === 'active' && (
               <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">

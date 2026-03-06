@@ -369,13 +369,15 @@ async function triggerAutomation(
           }
         }
 
-        // Follow CTA is a premium feature — free tier gets main content directly
+        // Follow CTA is a premium feature — free tier gets main content directly (sync with src/lib/subscription.ts)
         const { data: profileRow } = await supabase
           .from("profiles")
           .select("subscription_tier")
           .eq("id", automation.user_id)
           .single();
-        const tier = (profileRow?.subscription_tier ?? "free") as string;
+        const rawTier = (profileRow?.subscription_tier ?? "free") as string;
+        const legacyMap: Record<string, string> = { starter: "premium", pro: "premium", agency: "ultra_premium" };
+        const tier = rawTier === "premium" || rawTier === "ultra_premium" ? rawTier : (legacyMap[rawTier] ?? "free");
         const canUseFollowCta = tier === "premium" || tier === "ultra_premium";
 
         if (askToFollow && canUseFollowCta) {

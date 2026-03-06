@@ -8,8 +8,7 @@ import {
   Crown,
   Sparkles,
 } from 'lucide-react';
-
-type SubscriptionTier = 'free' | 'premium' | 'ultra_premium';
+import { SUBSCRIPTION_TIERS, normalizeTier, type SubscriptionTier } from '../lib/subscription';
 
 const PLANS = [
   {
@@ -76,7 +75,7 @@ export const Billing: React.FC = () => {
         return;
       }
       const { data: p } = await supabase.from('profiles').select('subscription_tier').eq('id', user.id).single();
-      const tier = (p?.subscription_tier ?? 'free') as SubscriptionTier;
+      const tier = normalizeTier(p?.subscription_tier);
       setCurrentTier(tier);
       setLoading(false);
     };
@@ -84,7 +83,7 @@ export const Billing: React.FC = () => {
   }, []);
 
   const handleUpgrade = async (planId: SubscriptionTier) => {
-    if (planId === currentTier || planId === 'free') return;
+    if (!SUBSCRIPTION_TIERS.includes(planId) || planId === currentTier || planId === 'free') return;
     setUpgradingId(planId);
     try {
       const { data: { user } } = await supabase.auth.getUser();

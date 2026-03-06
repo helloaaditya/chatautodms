@@ -35,10 +35,10 @@ serve(async (req) => {
       const status = subscription.status;
       const planId = subscription.items.data[0].plan.id;
 
-      // Map Stripe Plan to App Tier
+      // Map Stripe Plan to App Tier (sync with src/lib/subscription.ts: free | premium | ultra_premium)
       let tier = "free";
-      if (planId === Deno.env.get("STRIPE_PRO_PLAN_ID")) tier = "pro";
-      if (planId === Deno.env.get("STRIPE_AGENCY_PLAN_ID")) tier = "agency";
+      if (planId === Deno.env.get("STRIPE_PRO_PLAN_ID")) tier = "premium";
+      if (planId === Deno.env.get("STRIPE_AGENCY_PLAN_ID")) tier = "ultra_premium";
 
       // Update User Profile
       await supabase

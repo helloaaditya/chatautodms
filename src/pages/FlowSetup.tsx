@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Shuffle, Plus, ImageUp, Play, Loader2, Instagram, Heart, MessageSquare, Bookmark, MessageCircle, Share2, Home, Search, Video, User, MoreVertical, ChevronLeft, Lock, Crown } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { normalizeTier, canUseFollowCta, type SubscriptionTier } from '../lib/subscription';
 import { TEMPLATES, type TemplateId } from '../components/TemplatesModal';
 import { supabase } from '../api/supabase';
 import type { InstagramAccount } from '../types';
@@ -65,7 +66,7 @@ export const FlowSetup: React.FC = () => {
   const [stories, setStories] = useState<InstagramStory[]>([]);
   const [storiesLoading, setStoriesLoading] = useState(false);
   const [storiesError, setStoriesError] = useState<string | null>(null);
-  const [subscriptionTier, setSubscriptionTier] = useState<'free' | 'premium' | 'ultra_premium'>('free');
+  const [subscriptionTier, setSubscriptionTier] = useState<SubscriptionTier>('free');
 
   const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
   const MAX_IMAGE_MB = 5;
@@ -108,8 +109,7 @@ export const FlowSetup: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data: p } = await supabase.from('profiles').select('subscription_tier').eq('id', user.id).single();
-      const t = (p?.subscription_tier ?? 'free') as 'free' | 'premium' | 'ultra_premium';
-      setSubscriptionTier(t);
+      setSubscriptionTier(normalizeTier(p?.subscription_tier));
     };
     loadTier();
   }, []);
@@ -292,11 +292,25 @@ export const FlowSetup: React.FC = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
         setSaveError('Please sign in again.');
+        setSaving(false);
         return;
       }
       const instagramAccountId = selectedAccountId || (accounts.length > 0 ? accounts[0].id : null);
       if (!instagramAccountId && !editId) {
         setSaveError('Select an Instagram account above.');
+        setSaving(false);
+        return;
+      }
+      const messageTrimmed = String(message ?? '').trim();
+      if (!messageTrimmed) {
+        setSaveError('Enter the main DM message.');
+        setSaving(false);
+        return;
+      }
+      const isStoryReplyFlow = template.id === 'story_reply';
+      if (!isStoryReplyFlow && postMode === 'specific' && !selectedPostId) {
+        setSaveError('Select a post, or switch to "Next post" mode.');
+        setSaving(false);
         return;
       }
       const triggerType = templateToTriggerType[template.id] ?? 'comment';
@@ -310,8 +324,8 @@ export const FlowSetup: React.FC = () => {
         openingMessageText: openingMessageText.trim() || undefined,
         publicReply,
         publicReplyText: publicReplyText.trim() || undefined,
-        askToFollow: subscriptionTier !== 'free' ? askToFollow : false,
-        askToFollowText: subscriptionTier !== 'free' ? (askToFollowText.trim() || undefined) : undefined,
+        askToFollow: canUseFollowCta(subscriptionTier) ? askToFollow : false,
+        askToFollowText: canUseFollowCta(subscriptionTier) ? (askToFollowText.trim() || undefined) : undefined,
         followUp,
         followUpMessage: followUpMessage.trim() || undefined,
         messageImageUrl: messageImageUrl || undefined,
@@ -669,13 +683,13 @@ export const FlowSetup: React.FC = () => {
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                   Ask to follow before sending DM
-                  {subscriptionTier === 'free' && (
+                  {!canUseFollowCta(subscriptionTier) && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs font-medium">
                       <Crown size={12} /> Premium
                     </span>
                   )}
                 </span>
-                {subscriptionTier === 'free' ? (
+                {!canUseFollowCta(subscriptionTier) ? (
                   <Link to="/billing" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors">
                     <Lock size={14} /> Upgrade
                   </Link>
@@ -685,7 +699,7 @@ export const FlowSetup: React.FC = () => {
                   </button>
                 )}
               </div>
-              {askToFollow && subscriptionTier !== 'free' && (
+              {askToFollow && canUseFollowCta(subscriptionTier) && (
                 <input type="text" placeholder="e.g. Follow us for more!" value={askToFollowText} onChange={(e) => setAskToFollowText(e.target.value.slice(0, 200))} className="mt-2 w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-sm" />
               )}
             </div>

@@ -1,9 +1,12 @@
+import type { SubscriptionTier } from '../lib/subscription';
+export type { SubscriptionTier };
+
 export type Profile = {
   id: string;
   email: string;
   full_name?: string;
   avatar_url?: string;
-  subscription_tier: 'free' | 'starter' | 'pro' | 'agency' | 'premium' | 'ultra_premium';
+  subscription_tier: SubscriptionTier;
   subscription_status: 'active' | 'inactive' | 'past_due' | 'canceled';
   stripe_customer_id?: string;
   created_at: string;
