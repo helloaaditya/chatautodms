@@ -7,6 +7,9 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        landing: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+      },
       animation: {
         'in': 'fade-in 0.5s ease-out',
       },

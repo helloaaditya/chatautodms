@@ -1,6 +1,7 @@
 import React, { ReactNode } from 'react';
 import { useNavigate, NavLink, Link, useLocation } from 'react-router-dom';
 import { supabase } from '../../api/supabase';
+import { SITE_NAME, LOGO_URL } from '../../lib/constants';
 import { 
   LayoutDashboard, 
   Settings, 
@@ -85,11 +86,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Sidebar */}
       <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
         <div className="p-6">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <MessageSquare className="text-white" size={20} />
+          <Link to="/dashboard" className="flex items-center gap-2">
+            <div className="h-8 px-2 rounded-lg bg-gray-800 dark:bg-gray-700 flex items-center shrink-0">
+              <img src={LOGO_URL} alt={SITE_NAME} className="h-6 w-auto max-w-[90px] object-contain object-left" />
             </div>
-            <span className="text-xl font-bold tracking-tight">ChatAutoDMs</span>
+            <span className="text-xl font-bold tracking-tight">{SITE_NAME}</span>
           </Link>
         </div>
 

@@ -44,7 +44,7 @@ export const PwaInstallPrompt: React.FC = () => {
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-lg bg-gray-900 text-white px-4 py-2 shadow-lg text-sm">
-      <span>Install ChatAutoDMs</span>
+      <span>Install Grow Creation</span>
       <button
         type="button"
         onClick={handleInstall}
