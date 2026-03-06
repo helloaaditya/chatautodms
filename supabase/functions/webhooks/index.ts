@@ -400,7 +400,7 @@ async function triggerAutomation(
             // Also send follow buttons via DM
             try {
               const profileUsername = (accountRow as { account_name?: string | null }).account_name ?? null;
-              const btnText = "Tap Visit profile to open our page and follow us, then tap Follow now to get the content.";
+              const btnText = "Tap Visit profile to open our page and follow us, then tap I'm following✅ to get the content.";
               const buttonsSent = await sendDmWithFollowButtons(
                 accountRow.instagram_business_id,
                 accountRow.access_token,

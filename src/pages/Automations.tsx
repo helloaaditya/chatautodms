@@ -12,7 +12,9 @@ import {
   Mail,
   MessageCircle,
   Hash,
-  ArrowRight
+  ArrowRight,
+  Pause,
+  Play
 } from 'lucide-react';
 import { Automation } from '../types';
 import { useNavigate } from 'react-router-dom';
@@ -23,9 +25,11 @@ export const Automations: React.FC = () => {
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused'>('all');
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [copyingId, setCopyingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const fetchAutomations = async () => {
     const { data, error } = await supabase
@@ -74,6 +78,17 @@ export const Automations: React.FC = () => {
     if (!error) fetchAutomations();
   };
 
+  const handlePauseResume = async (a: Automation) => {
+    setTogglingId(a.id);
+    const nextActive = !a.is_active;
+    const { error } = await supabase
+      .from('automations')
+      .update({ is_active: nextActive })
+      .eq('id', a.id);
+    setTogglingId(null);
+    if (!error) fetchAutomations();
+  };
+
   useEffect(() => {
     fetchAutomations();
   }, []);
@@ -118,6 +133,15 @@ export const Automations: React.FC = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'paused')}
+          className="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl outline-none shadow-sm focus:ring-2 focus:ring-blue-500/50"
+        >
+          <option value="all">All status</option>
+          <option value="active">Active</option>
+          <option value="paused">Paused</option>
+        </select>
         <select className="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl outline-none shadow-sm focus:ring-2 focus:ring-blue-500/50">
           <option>All Triggers</option>
           <option>Direct Messages</option>
@@ -134,7 +158,14 @@ export const Automations: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-4">
-          {automations.map((automation) => {
+          {automations
+            .filter((a) => {
+              if (statusFilter === 'active') return a.is_active;
+              if (statusFilter === 'paused') return !a.is_active;
+              return true;
+            })
+            .filter((a) => !searchQuery.trim() || a.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+            .map((automation) => {
             const trigger = triggerIcons[automation.trigger_type as keyof typeof triggerIcons] || triggerIcons.dm;
             return (
               <div 
@@ -154,8 +185,8 @@ export const Automations: React.FC = () => {
                           Active
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded-lg text-xs font-semibold">
-                          Draft
+                        <span className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-lg text-xs font-semibold">
+                          Paused
                         </span>
                       )}
                     </div>
@@ -172,6 +203,17 @@ export const Automations: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handlePauseResume(automation)}
+                      disabled={!!togglingId}
+                      className={`p-2 rounded-xl transition-colors disabled:opacity-50 ${automation.is_active
+                        ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                        : 'text-green-500 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
+                      }`}
+                      title={automation.is_active ? 'Pause automation' : 'Resume automation'}
+                    >
+                      {automation.is_active ? <Pause size={18} /> : <Play size={18} />}
+                    </button>
                     <button
                       onClick={() => handleEdit(automation.id)}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors"
