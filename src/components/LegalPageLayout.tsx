@@ -13,13 +13,13 @@ export const LegalPageLayout: React.FC<LegalPageLayoutProps> = ({ title, childre
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap');
         .legal-page {
-          --bg: #050508;
+          --bg: #f5f6fa;
           overflow-x: hidden;
-          --bg2: #0a0a10;
-          --surface: #0f0f18;
-          --border: rgba(255,255,255,0.07);
-          --text: #f0f0f8;
-          --text-muted: #6b6b80;
+          --bg2: #eef1f7;
+          --surface: #ffffff;
+          --border: rgba(0,0,0,0.08);
+          --text: #0f172a;
+          --text-muted: #64748b;
           --pink: #e040fb;
           --blue: #4f8ef7;
           --cyan: #22d3ee;
@@ -39,7 +39,7 @@ export const LegalPageLayout: React.FC<LegalPageLayoutProps> = ({ title, childre
           padding: 0 clamp(1rem, 4vw, 4rem);
           display: flex; align-items: center; justify-content: space-between;
           gap: 1rem;
-          background: rgba(5,5,8,0.85);
+          background: rgba(255,255,255,0.92);
           backdrop-filter: blur(20px);
           border-bottom: 1px solid var(--border);
           box-sizing: border-box;
@@ -69,7 +69,7 @@ export const LegalPageLayout: React.FC<LegalPageLayoutProps> = ({ title, childre
           padding: 8px 16px; text-decoration: none;
           border-radius: var(--radius); flex-shrink: 0; white-space: nowrap;
         }
-        .legal-page .legal-nav .btn-ghost:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+        .legal-page .legal-nav .btn-ghost:hover { color: var(--text); background: rgba(0,0,0,0.05); }
         .legal-page .legal-main {
           max-width: 42rem;
           margin: 0 auto;

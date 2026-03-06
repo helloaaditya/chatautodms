@@ -29,13 +29,13 @@ export const AuthPage: React.FC = () => {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap');
         .auth-page {
-          --bg: #050508;
+          --bg: #f5f6fa;
           overflow-x: hidden;
-          --surface: #0f0f18;
-          --border: rgba(255,255,255,0.07);
+          --surface: #ffffff;
+          --border: rgba(0,0,0,0.08);
           --radius: 16px;
-          --text: #f0f0f8;
-          --text-muted: #6b6b80;
+          --text: #0f172a;
+          --text-muted: #64748b;
           --blue: #4f8ef7;
           --grad: linear-gradient(135deg, #e040fb 0%, #4f8ef7 50%, #22d3ee 100%);
           font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
@@ -52,7 +52,7 @@ export const AuthPage: React.FC = () => {
           padding: 0 clamp(1rem, 4vw, 4rem);
           display: flex; align-items: center; justify-content: space-between;
           gap: 1rem;
-          background: rgba(5,5,8,0.85);
+          background: rgba(255,255,255,0.92);
           backdrop-filter: blur(20px);
           border-bottom: 1px solid var(--border);
           box-sizing: border-box;
@@ -82,7 +82,7 @@ export const AuthPage: React.FC = () => {
           padding: 8px 16px; text-decoration: none;
           border-radius: var(--radius); flex-shrink: 0; white-space: nowrap;
         }
-        .auth-page .auth-nav .btn-ghost:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+        .auth-page .auth-nav .btn-ghost:hover { color: var(--text); background: rgba(0,0,0,0.05); }
         .auth-page .auth-center {
           min-height: 100vh;
           display: flex;
@@ -119,7 +119,7 @@ export const AuthPage: React.FC = () => {
         .auth-page .auth-card input {
           width: 100%;
           padding: 0.875rem 1rem 0.875rem 2.75rem;
-          background: rgba(255,255,255,0.04);
+          background: rgba(0,0,0,0.03);
           border: 1px solid var(--border);
           border-radius: 14px;
           color: var(--text);

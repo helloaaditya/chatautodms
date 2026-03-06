@@ -132,15 +132,15 @@ export const LandingPage = () => {
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-          --bg: #050508;
-          --bg2: #0a0a10;
-          --surface: #0f0f18;
-          --surface2: #14141f;
-          --border: rgba(255,255,255,0.07);
-          --border-bright: rgba(255,255,255,0.14);
-          --text: #f0f0f8;
-          --text-muted: #6b6b80;
-          --text-dim: #3a3a50;
+          --bg: #f5f6fa;
+          --bg2: #eef1f7;
+          --surface: #ffffff;
+          --surface2: #f8f9fc;
+          --border: rgba(0,0,0,0.08);
+          --border-bright: rgba(0,0,0,0.14);
+          --text: #0f172a;
+          --text-muted: #64748b;
+          --text-dim: #94a3b8;
           --pink: #e040fb;
           --blue: #4f8ef7;
           --cyan: #22d3ee;
@@ -191,7 +191,7 @@ export const LandingPage = () => {
           overflow: hidden;
         }
         .nav.scrolled {
-          background: rgba(5,5,8,0.85);
+          background: rgba(255,255,255,0.92);
           backdrop-filter: blur(20px);
           border-bottom: 1px solid var(--border);
         }
@@ -233,7 +233,7 @@ export const LandingPage = () => {
           font-size: 0.875rem; font-weight: 500; padding: 8px 16px;
           text-decoration: none; transition: color 0.2s; border-radius: var(--radius);
         }
-        .btn-ghost:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+        .btn-ghost:hover { color: var(--text); background: rgba(0,0,0,0.05); }
         .btn-primary {
           background: var(--grad);
           border: none; cursor: pointer;
@@ -254,7 +254,7 @@ export const LandingPage = () => {
           align-items: center; justify-content: center;
           border-radius: 10px;
         }
-        .nav-mobile-toggle:hover { background: rgba(255,255,255,0.06); }
+        .nav-mobile-toggle:hover { background: rgba(0,0,0,0.06); }
         .nav-mobile-toggle:focus { outline: none; }
 
         @media (max-width: 768px) {
@@ -271,7 +271,7 @@ export const LandingPage = () => {
         .nav-drawer {
           display: none;
           position: fixed; top: 72px; left: 0; right: 0; bottom: 0;
-          background: rgba(5,5,8,0.98); backdrop-filter: blur(20px);
+          background: rgba(255,255,255,0.98); backdrop-filter: blur(20px);
           z-index: 99; padding: 1.5rem; overflow-y: auto;
           flex-direction: column; gap: 0;
           -webkit-overflow-scrolling: touch;
@@ -310,8 +310,8 @@ export const LandingPage = () => {
         .hero-grid {
           position: absolute; inset: 0;
           background-image:
-            linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
           background-size: 60px 60px;
           mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
         }
@@ -323,10 +323,10 @@ export const LandingPage = () => {
         .hero-badge {
           display: inline-flex; align-items: center; gap: 8px;
           padding: 6px 16px 6px 8px;
-          background: rgba(224,64,251,0.1);
-          border: 1px solid rgba(224,64,251,0.25);
+          background: rgba(224,64,251,0.12);
+          border: 1px solid rgba(224,64,251,0.3);
           border-radius: 100px;
-          font-size: 0.8rem; font-weight: 600; color: #d580f7;
+          font-size: 0.8rem; font-weight: 600; color: #a855f7;
           margin-bottom: 1.5rem;
           animation: fadeUp 0.6s ease both;
         }
@@ -377,11 +377,11 @@ export const LandingPage = () => {
         }
         .btn-hero-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 50px rgba(224,64,251,0.4); }
         .btn-hero-secondary {
-          background: rgba(255,255,255,0.05);
+          background: rgba(0,0,0,0.04);
           border: 1px solid var(--border-bright);
           color: var(--text);
         }
-        .btn-hero-secondary:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.25); }
+        .btn-hero-secondary:hover { background: rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.2); }
         .hero-social-proof {
           display: flex; align-items: center; gap: 12px;
           animation: fadeUp 0.6s 0.4s ease both;
@@ -389,7 +389,7 @@ export const LandingPage = () => {
         .avatars { display: flex; }
         .avatar {
           width: 34px; height: 34px; border-radius: 50%;
-          border: 2px solid var(--bg);
+          border: 2px solid var(--surface);
           background: linear-gradient(135deg, #e040fb, #4f8ef7);
           margin-left: -8px;
           font-size: 12px; display: flex; align-items: center; justify-content: center;
@@ -408,7 +408,7 @@ export const LandingPage = () => {
           border: 1px solid var(--border-bright);
           border-radius: var(--radius-lg);
           overflow: hidden;
-          box-shadow: 0 40px 120px rgba(0,0,0,0.8), 0 0 80px rgba(224,64,251,0.1);
+          box-shadow: 0 24px 64px rgba(0,0,0,0.12), 0 0 40px rgba(224,64,251,0.08);
           position: relative;
         }
         .hero-card-header {
@@ -423,7 +423,7 @@ export const LandingPage = () => {
         .tl-y { background: #febc2e; }
         .tl-g { background: #28c840; }
         .card-title-bar {
-          flex: 1; background: rgba(255,255,255,0.05); border-radius: 6px;
+          flex: 1; background: rgba(0,0,0,0.05); border-radius: 6px;
           height: 24px; display: flex; align-items: center; padding: 0 10px;
           font-size: 0.7rem; color: var(--text-muted);
         }
@@ -479,7 +479,7 @@ export const LandingPage = () => {
           border: 1px solid var(--border-bright);
           border-radius: 12px;
           padding: 10px 14px;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.12);
           display: flex; align-items: center; gap: 8px;
           animation: floatNotif 3s ease-in-out infinite;
           white-space: nowrap;
@@ -495,10 +495,10 @@ export const LandingPage = () => {
         .floating-notif2 {
           position: absolute; left: -24px; bottom: 15%;
           background: var(--surface);
-          border: 1px solid rgba(52,211,153,0.3);
+          border: 1px solid rgba(52,211,153,0.35);
           border-radius: 12px;
           padding: 10px 14px;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.12);
           display: flex; align-items: center; gap: 8px;
           animation: floatNotif 3s 1.5s ease-in-out infinite;
           white-space: nowrap;
@@ -677,7 +677,7 @@ export const LandingPage = () => {
           border-color: var(--border-bright);
           background: var(--surface);
           transform: translateY(-2px);
-          box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.1);
         }
         .feature-card:hover::before, .feature-card.active::before { opacity: 1; }
         .feature-icon-wrap {
@@ -752,24 +752,24 @@ export const LandingPage = () => {
         .plan-card:hover {
           border-color: var(--border-bright);
           transform: translateY(-4px);
-          box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+          box-shadow: 0 24px 64px rgba(0,0,0,0.12);
         }
         .plan-card.featured {
           border-color: rgba(224,64,251,0.35);
-          background: linear-gradient(160deg, rgba(224,64,251,0.06) 0%, var(--surface) 60%);
-          box-shadow: 0 0 60px rgba(224,64,251,0.1);
+          background: linear-gradient(160deg, rgba(224,64,251,0.08) 0%, var(--surface) 60%);
+          box-shadow: 0 0 40px rgba(224,64,251,0.08);
         }
         .plan-card.featured:hover {
-          box-shadow: 0 30px 80px rgba(224,64,251,0.2);
+          box-shadow: 0 24px 64px rgba(224,64,251,0.15);
         }
         .plan-tag {
           display: inline-block; padding: 3px 10px; border-radius: 100px;
           font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
           letter-spacing: 0.06em; margin-bottom: 1.5rem;
         }
-        .tag-free { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+        .tag-free { background: rgba(0,0,0,0.06); color: var(--text-muted); }
         .tag-popular { background: var(--grad); color: white; }
-        .tag-ultra { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+        .tag-ultra { background: rgba(0,0,0,0.06); color: var(--text-muted); }
         .plan-name {
           font-family: var(--font-display);
           font-size: 1.4rem; font-weight: 800; margin-bottom: 0.25rem;
@@ -821,7 +821,7 @@ export const LandingPage = () => {
           border: 1px solid var(--border-bright);
           color: var(--text);
         }
-        .btn-plan-outline:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.25); }
+        .btn-plan-outline:hover { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.2); }
         @media (max-width: 768px) {
           .pricing-grid { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; }
         }
