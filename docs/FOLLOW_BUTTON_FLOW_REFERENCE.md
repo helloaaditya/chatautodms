@@ -7,11 +7,12 @@
 | Step | Event | System action |
 |------|--------|----------------|
 | 1 | User comments on post (keyword match) | Send opening message + **one** DM with buttons: “Visit profile” (URL), “I'm following✅” (postback `FOLLOW_CTA`). Create `pending_dm_content` with `reminder_sent_count = 0`. |
-| 2 | **1st tap** on “I'm following✅” | If `pending_dm_content` exists and `reminder_sent_count < 1`: send same CTA (Visit profile + I'm following), set `reminder_sent_count = 1`, return. |
+| 2 | **1st tap** on “I'm following✅” | If `pending_dm_content` exists and `reminder_sent_count < 1`: try insert `automation_sent_log(dm_reminder)`. If 23505 → CTA already sent (e.g. from comment); set `reminder_sent_count = 1`, return (no CTA). Else send CTA once, set `reminder_sent_count = 1`, return. |
 | 3 | **2nd tap** on “I'm following✅” | If `pending_dm_content` exists and `reminder_sent_count >= 1`: insert `automation_sent_log` (dm_content) for dedup, send main content DM, delete pending row. |
 | 4 | No pending row (e.g. lost) | **Fallback:** Find automation with `askToFollow` + message. If `dm_reminder` sent but not `dm_content`: upsert pending with `reminder_sent_count = 1` (next tap = content). If no reminder yet: send CTA, log `dm_reminder`, create pending with `reminder_sent_count = 1` (next tap = content). |
 
-**Deduplication:**
+**Deduplication (stops CTA loop):**
+- **CTA only once:** Insert `automation_sent_log(trigger_type='dm_reminder', trigger_id=senderId)` before sending the CTA. If 23505 (unique) → CTA was already sent; only set `pending.reminder_sent_count = 1` and return (no CTA again). Comment flow also inserts `dm_reminder` when sending the initial buttons.
 - **Duplicate webhook POST:** Use `webhook_event_dedup.event_id = postback.mid` (or `message.mid`). Insert before processing; if 23505 skip.
 - **Duplicate main content:** Insert `automation_sent_log(trigger_type='dm_content', trigger_id=senderId)` before sending; if 23505 skip.
 

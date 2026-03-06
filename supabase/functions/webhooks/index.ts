@@ -188,25 +188,24 @@ async function triggerAutomation(
         if (pending?.content_text) {
           const p = pending as { reminder_sent_count?: number | null };
           const count = p.reminder_sent_count ?? 0;
-          const readyForContent = count >= 1; // 1st tap = CTA once, 2nd tap = main content
+          const readyForContent = count >= 1;
 
           if (!readyForContent) {
-            // Atomic claim: only one request can move 0 → 1 (stops CTA loop from duplicate webhooks or repeated taps)
-            const { data: claimed, error: claimErr } = await supabase
-              .from("pending_dm_content")
-              .update({ follow_reminder_sent: true, reminder_sent_count: 1 })
-              .eq("id", pending.id)
-              .eq("reminder_sent_count", 0)
-              .select("id");
-            const weClaimedFirstTap = !claimErr && Array.isArray(claimed) && claimed.length > 0;
-            if (weClaimedFirstTap) {
-              const reminderText = "Please follow our account first. Tap Visit profile to open our page and follow us, then tap the button below to get the content.";
-              const profileUsername = (accountRow as { account_name?: string | null }).account_name ?? null;
-              await sendDmWithFollowButtons(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, profileUsername);
-              console.log("[webhook] sent Follow CTA once (1st tap) — next tap = main content");
-            } else {
-              console.log("[webhook] first tap already claimed (no CTA loop)", { senderId, pendingId: pending.id });
+            // ALTERNATE: Gate CTA by dm_reminder log — only one CTA per (automation, sender) ever (unique index)
+            const { error: reminderLogErr } = await supabase
+              .from("automation_sent_log")
+              .insert({ automation_id: pending.automation_id, trigger_type: "dm_reminder", trigger_id: senderId });
+            if (reminderLogErr?.code === "23505") {
+              // CTA already sent for this user — just mark pending ready so next tap = content (no CTA again)
+              await supabase.from("pending_dm_content").update({ follow_reminder_sent: true, reminder_sent_count: 1 }).eq("id", pending.id);
+              console.log("[webhook] CTA already sent (dm_reminder exists), next tap = content", { senderId });
+              return;
             }
+            const reminderText = "Please follow our account first. Tap Visit profile to open our page and follow us, then tap the button below to get the content.";
+            const profileUsername = (accountRow as { account_name?: string | null }).account_name ?? null;
+            await sendDmWithFollowButtons(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, profileUsername);
+            await supabase.from("pending_dm_content").update({ follow_reminder_sent: true, reminder_sent_count: 1 }).eq("id", pending.id);
+            console.log("[webhook] sent Follow CTA once (dm_reminder logged), next tap = main content");
             return;
           }
 
@@ -500,13 +499,14 @@ async function triggerAutomation(
                 profileUsername
               );
               if (buttonsSent) {
+                await supabase.from("automation_sent_log").insert({ automation_id: automation.id, trigger_type: "dm_reminder", trigger_id: senderId }).catch(() => {});
                 await supabase
                   .from("pending_dm_content")
                   .update({ follow_reminder_sent: true, reminder_sent_count: 0 })
                   .eq("instagram_account_id", accountUuid)
                   .eq("instagram_sender_id", senderId);
               }
-              console.log("[webhook] Follow + Visit profile buttons sent — 1st tap = CTA again, 2nd tap = main content");
+              console.log("[webhook] Follow + Visit profile buttons sent — 1st tap = no repeat CTA, 2nd tap = main content");
             } catch (_) { /* ignore */ }
 
             if (followUp && String(followUpMessage).trim()) {
