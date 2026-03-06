@@ -186,30 +186,7 @@ async function triggerAutomation(
         const pending = Array.isArray(pendingList) ? pendingList[0] : null;
 
         if (pending?.content_text) {
-          const p = pending as { reminder_sent_count?: number | null };
-          const count = p.reminder_sent_count ?? 0;
-          const readyForContent = count >= 1;
-
-          if (!readyForContent) {
-            // ALTERNATE: Gate CTA by dm_reminder log — only one CTA per (automation, sender) ever (unique index)
-            const { error: reminderLogErr } = await supabase
-              .from("automation_sent_log")
-              .insert({ automation_id: pending.automation_id, trigger_type: "dm_reminder", trigger_id: senderId });
-            if (reminderLogErr?.code === "23505") {
-              // CTA already sent for this user — just mark pending ready so next tap = content (no CTA again)
-              await supabase.from("pending_dm_content").update({ follow_reminder_sent: true, reminder_sent_count: 1 }).eq("id", pending.id);
-              console.log("[webhook] CTA already sent (dm_reminder exists), next tap = content", { senderId });
-              return;
-            }
-            const reminderText = "Please follow our account first. Tap Visit profile to open our page and follow us, then tap the button below to get the content.";
-            const profileUsername = (accountRow as { account_name?: string | null }).account_name ?? null;
-            await sendDmWithFollowButtons(accountRow.instagram_business_id, accountRow.access_token, senderId, reminderText, profileUsername);
-            await supabase.from("pending_dm_content").update({ follow_reminder_sent: true, reminder_sent_count: 1 }).eq("id", pending.id);
-            console.log("[webhook] sent Follow CTA once (dm_reminder logged), next tap = main content");
-            return;
-          }
-
-          // ✅ Second tap — deliver main content
+          // NEW FLOW: Never send CTA from DM handler. Only send main content when they tap (dedup = one send).
           const name = (pending as { sender_full_name?: string | null }).sender_full_name?.trim();
           const thankYouMessage = name
             ? `Hi ${name}!\n\nThank you! Here's what you asked for:\n\n${pending.content_text}`
@@ -225,7 +202,7 @@ async function triggerAutomation(
             return;
           }
 
-          console.log("[webhook] sending main content to user (2nd tap I'm following)", { senderId, hasName: !!name });
+          console.log("[webhook] sending main content (tap I'm following)", { senderId, hasName: !!name });
           const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
 
           if (sent) {
@@ -245,23 +222,9 @@ async function triggerAutomation(
                 source: "dm",
               });
             } catch (_) { /* ignore */ }
-            console.log("[webhook] ✅ content delivered after follow confirmation");
+            console.log("[webhook] ✅ content delivered");
           } else {
-            console.log("[webhook] sendDmToUser failed — re-sending follow buttons so user can retry");
-            const reminderText = "It seems we couldn't send you the content. Please make sure you've followed our account, then tap the button below again.";
-            const profileUsername = (accountRow as { account_name?: string | null }).account_name ?? null;
-            const retrySent = await sendDmWithFollowButtons(
-              accountRow.instagram_business_id,
-              accountRow.access_token,
-              senderId,
-              reminderText,
-              profileUsername
-            );
-            if (retrySent) {
-              const newCount = (count + 1);
-              await supabase.from("pending_dm_content").update({ reminder_sent_count: newCount }).eq("id", pending.id);
-              console.log("[webhook] re-sent follow buttons after DM failure, count=" + newCount);
-            }
+            console.log("[webhook] sendDmToUser failed (24h window?) — content not sent", { senderId });
           }
           return;
         }
@@ -297,67 +260,34 @@ async function triggerAutomation(
 
           if (withAskAndMessage?.config && contentStr) {
             const automationId = (withAskAndMessage as { id: string }).id;
-            console.log("[webhook] fallback: found automation", { automationId, senderId });
+            console.log("[webhook] fallback: found automation, send content only (no CTA)", { automationId, senderId });
 
-            // Check if we already sent a reminder to this sender for this automation
-            const { data: existingLog } = await supabase
+            const { error: contentClaimErr } = await supabase
               .from("automation_sent_log")
-              .select("id, trigger_type")
-              .eq("automation_id", automationId)
-              .eq("trigger_id", senderId)
-              .in("trigger_type", ["dm_reminder", "dm_content"]);
+              .insert({ automation_id: automationId, trigger_type: "dm_content", trigger_id: senderId });
 
-            const hasReminder = Array.isArray(existingLog) && existingLog.some((r: { trigger_type: string }) => r.trigger_type === "dm_reminder");
-            const hasContent = Array.isArray(existingLog) && existingLog.some((r: { trigger_type: string }) => r.trigger_type === "dm_content");
-
-            if (hasContent) {
-              console.log("[webhook] fallback: content already sent, skip (no duplicate)", { senderId, automationId });
-            } else if (hasReminder) {
-              // Reminder already sent (e.g. from comment) — ensure pending row exists with count=1 so next tap delivers content
-              console.log("[webhook] fallback: reminder already sent, ensuring pending for 2nd tap = content", { senderId, automationId });
-              const row: Record<string, unknown> = {
-                user_id: (withAskAndMessage as { user_id: string }).user_id,
-                instagram_account_id: accountUuid,
-                instagram_sender_id: senderId,
-                automation_id: automationId,
-                content_text: contentStr,
-                reminder_sent_count: 1,
-                follow_reminder_sent: true,
-              };
-              await supabase.from("pending_dm_content").upsert(row, { onConflict: "instagram_account_id,instagram_sender_id" });
-              console.log("[webhook] fallback: pending ready — next tap will deliver main content");
+            if (contentClaimErr?.code === "23505") {
+              console.log("[webhook] fallback: content already sent, skip", { senderId, automationId });
             } else {
-              // No reminder sent yet — send follow buttons (1st tap); 2nd tap will deliver content
-              console.log("[webhook] fallback: sending follow buttons (1st tap)", { senderId, automationId });
-              const reminderText = "Please follow our account first. Tap Visit profile to open our page and follow us, then tap the button below to get the content.";
-              const profileUsername = (accountRow as { account_name?: string | null }).account_name ?? null;
-              const sent = await sendDmWithFollowButtons(
-                accountRow.instagram_business_id,
-                accountRow.access_token,
-                senderId,
-                reminderText,
-                profileUsername
-              );
+              const thankYouMessage = `Thank you! Here's what you asked for:\n\n${contentStr}`;
+              const sent = await sendDmToUser(accountRow.instagram_business_id, accountRow.access_token, senderId, thankYouMessage);
               if (sent) {
-                await supabase.from("automation_sent_log").insert({ automation_id: automationId, trigger_type: "dm_reminder", trigger_id: senderId }).catch(() => {});
-                const row: Record<string, unknown> = {
-                  user_id: (withAskAndMessage as { user_id: string }).user_id,
-                  instagram_account_id: accountUuid,
-                  instagram_sender_id: senderId,
-                  automation_id: automationId,
-                  content_text: contentStr,
-                  reminder_sent_count: 1,
-                  follow_reminder_sent: true,
-                };
-                const { error: upsertErr } = await supabase
-                  .from("pending_dm_content")
-                  .upsert(row, { onConflict: "instagram_account_id,instagram_sender_id" });
-                if (upsertErr) {
-                  await supabase.from("pending_dm_content").insert(row).catch((e: Error) => console.log("[webhook] fallback insert failed", e.message));
-                }
-                console.log("[webhook] fallback: sent CTA (1st tap) — 2nd tap will deliver main content");
-              } else {
-                console.log("[webhook] fallback: sendDmWithFollowButtons failed", { senderId, automationId });
+                try {
+                  await saveLeadAndConversation(supabase, {
+                    user_id: (withAskAndMessage as { user_id: string }).user_id,
+                    instagram_account_id: accountUuid,
+                    instagram_business_id: accountRow.instagram_business_id,
+                    automation_id: automationId,
+                    sender_id: senderId,
+                    sender_username: null,
+                    sender_profile_picture: null,
+                    sender_full_name: null,
+                    incoming_text: text,
+                    outgoing_text: thankYouMessage,
+                    source: "dm",
+                  });
+                } catch (_) { /* ignore */ }
+                console.log("[webhook] fallback: ✅ content sent");
               }
             }
           }
@@ -499,14 +429,13 @@ async function triggerAutomation(
                 profileUsername
               );
               if (buttonsSent) {
-                await supabase.from("automation_sent_log").insert({ automation_id: automation.id, trigger_type: "dm_reminder", trigger_id: senderId }).catch(() => {});
                 await supabase
                   .from("pending_dm_content")
                   .update({ follow_reminder_sent: true, reminder_sent_count: 0 })
                   .eq("instagram_account_id", accountUuid)
                   .eq("instagram_sender_id", senderId);
               }
-              console.log("[webhook] Follow + Visit profile buttons sent — 1st tap = no repeat CTA, 2nd tap = main content");
+              console.log("[webhook] CTA sent once (from comment). Tap I'm following = main content only.");
             } catch (_) { /* ignore */ }
 
             if (followUp && String(followUpMessage).trim()) {
