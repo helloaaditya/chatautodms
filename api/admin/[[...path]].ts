@@ -52,8 +52,14 @@ function getPathAndQuery(req: Req): { route: string; query: Record<string, strin
   return { route, query };
 }
 
+function setNoCache(res: Res) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+}
+
 export default async function handler(req: Req, res: Res) {
-  res.setHeader('Cache-Control', 'no-store');
+  setNoCache(res);
   const { route, query } = getPathAndQuery(req);
 
   try {
