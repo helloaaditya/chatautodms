@@ -121,7 +121,10 @@ export const Admin: React.FC = () => {
       ...(options.headers as Record<string, string>),
     };
     if (token) (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(url, { ...options, headers });
+    // Bypass edge/browser cache so admin always gets fresh data (avoids 304)
+    const isGet = (options.method ?? 'GET') === 'GET';
+    const finalUrl = isGet ? `${url}${url.includes('?') ? '&' : '?'}_t=${Date.now()}` : url;
+    const res = await fetch(finalUrl, { ...options, headers, cache: 'no-store' });
     return res;
   }, []);
 
