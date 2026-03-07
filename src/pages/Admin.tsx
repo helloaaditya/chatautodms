@@ -10,6 +10,9 @@ import {
   Pencil,
   Trash2,
   X,
+  LayoutDashboard,
+  BarChart3,
+  Mail,
 } from 'lucide-react';
 import { supabase } from '../api/supabase';
 
@@ -20,7 +23,7 @@ async function getSessionToken(): Promise<string | null> {
   return session?.access_token ?? null;
 }
 
-type TabId = 'users' | 'accounts' | 'automations' | 'leads';
+type TabId = 'overview' | 'users' | 'accounts' | 'automations' | 'leads' | 'analytics' | 'message_logs';
 
 interface ProfileRow {
   id: string;
@@ -63,16 +66,49 @@ interface LeadRow {
   created_at: string;
 }
 
+interface Stats {
+  profiles: number;
+  instagram_accounts: number;
+  automations: number;
+  leads: number;
+  analytics_events: number;
+  message_logs: number;
+}
+
+interface AnalyticsRow {
+  id: string;
+  user_id: string;
+  instagram_account_id: string;
+  automation_id: string | null;
+  event_type: string;
+  created_at: string;
+}
+
+interface MessageLogRow {
+  id: string;
+  user_id: string;
+  instagram_account_id: string;
+  sender_id: string;
+  receiver_id: string;
+  message_text: string | null;
+  message_type: string;
+  status: string | null;
+  created_at: string;
+}
+
 export const Admin: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
-  const [tab, setTab] = useState<TabId>('users');
+  const [tab, setTab] = useState<TabId>('overview');
   const [search, setSearch] = useState('');
 
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [accounts, setAccounts] = useState<InstagramAccountRow[]>([]);
   const [automations, setAutomations] = useState<AutomationRow[]>([]);
   const [leads, setLeads] = useState<LeadRow[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [analyticsList, setAnalyticsList] = useState<AnalyticsRow[]>([]);
+  const [messageLogsList, setMessageLogsList] = useState<MessageLogRow[]>([]);
 
   const [editModal, setEditModal] = useState<{ type: TabId; row: Record<string, unknown> } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -129,6 +165,30 @@ export const Admin: React.FC = () => {
     }
   }, [fetchWithAuth]);
 
+  const loadStats = useCallback(async () => {
+    const res = await fetchWithAuth(API + '/stats');
+    if (res.ok) {
+      const data = await res.json();
+      setStats(data as Stats);
+    }
+  }, [fetchWithAuth]);
+
+  const loadAnalytics = useCallback(async () => {
+    const res = await fetchWithAuth(API + '/analytics');
+    if (res.ok) {
+      const data = await res.json();
+      setAnalyticsList(Array.isArray(data) ? data : []);
+    }
+  }, [fetchWithAuth]);
+
+  const loadMessageLogs = useCallback(async () => {
+    const res = await fetchWithAuth(API + '/message-logs');
+    if (res.ok) {
+      const data = await res.json();
+      setMessageLogsList(Array.isArray(data) ? data : []);
+    }
+  }, [fetchWithAuth]);
+
   useEffect(() => {
     (async () => {
       const isAdmin = await checkAdminViaSupabase();
@@ -137,10 +197,18 @@ export const Admin: React.FC = () => {
         setLoading(false);
         return;
       }
-      await Promise.all([loadProfiles(), loadAccounts(), loadAutomations(), loadLeads()]);
+      await Promise.all([
+        loadProfiles(),
+        loadAccounts(),
+        loadAutomations(),
+        loadLeads(),
+        loadStats(),
+        loadAnalytics(),
+        loadMessageLogs(),
+      ]);
       setLoading(false);
     })();
-  }, [checkAdminViaSupabase, loadProfiles, loadAccounts, loadAutomations, loadLeads]);
+  }, [checkAdminViaSupabase, loadProfiles, loadAccounts, loadAutomations, loadLeads, loadStats, loadAnalytics, loadMessageLogs]);
 
   const handleUpdate = async (type: TabId, id: string, payload: Record<string, unknown>) => {
     setSaving(true);
@@ -204,10 +272,13 @@ export const Admin: React.FC = () => {
   }
 
   const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'accounts', label: 'Instagram Accounts', icon: Instagram },
     { id: 'automations', label: 'Automations', icon: MessageSquare },
     { id: 'leads', label: 'Leads', icon: UserPlus },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'message_logs', label: 'Message logs', icon: Mail },
   ];
 
   const filteredProfiles = filter(profiles, ['email', 'full_name', 'subscription_tier']);
@@ -223,7 +294,7 @@ export const Admin: React.FC = () => {
             <Shield className="w-8 h-8 text-amber-500" />
             Admin Panel
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">View and manage all users, accounts, automations, and leads.</p>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">View and manage everything: overview, users, accounts, automations, leads, analytics, and message logs.</p>
         </div>
       </div>
 
@@ -245,16 +316,52 @@ export const Admin: React.FC = () => {
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
-        <Search className="w-5 h-5 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Search..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 max-w-xs rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-      </div>
+      {['users', 'accounts', 'automations', 'leads'].includes(tab) && (
+        <div className="flex items-center gap-2">
+          <Search className="w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="flex-1 max-w-xs rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+      )}
+
+      {/* Overview */}
+      {tab === 'overview' && (
+        <div className="space-y-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Dashboard</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            {[
+              { label: 'Users', value: stats?.profiles ?? profiles.length, icon: Users, color: 'bg-blue-500' },
+              { label: 'Instagram accounts', value: stats?.instagram_accounts ?? accounts.length, icon: Instagram, color: 'bg-pink-500' },
+              { label: 'Automations', value: stats?.automations ?? automations.length, icon: MessageSquare, color: 'bg-green-500' },
+              { label: 'Leads', value: stats?.leads ?? leads.length, icon: UserPlus, color: 'bg-amber-500' },
+              { label: 'Analytics events', value: stats?.analytics_events ?? analyticsList.length, icon: BarChart3, color: 'bg-purple-500' },
+              { label: 'Message logs', value: stats?.message_logs ?? messageLogsList.length, icon: Mail, color: 'bg-cyan-500' },
+            ].map(({ label, value, icon: Icon, color }) => (
+              <div
+                key={label}
+                className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 shadow-sm"
+              >
+                <div className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center text-white mb-3`}>
+                  <Icon size={20} />
+                </div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Quick links</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Use the tabs above to view and edit users, Instagram accounts, automations, leads, analytics events, and message logs.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Users table */}
       {tab === 'users' && (
@@ -455,6 +562,76 @@ export const Admin: React.FC = () => {
           </div>
           {filteredLeads.length === 0 && (
             <div className="px-4 py-8 text-center text-gray-500">No leads found.</div>
+          )}
+        </div>
+      )}
+
+      {/* Analytics table */}
+      {tab === 'analytics' && (
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Event type</th>
+                  <th className="px-4 py-3 font-semibold">User ID</th>
+                  <th className="px-4 py-3 font-semibold">Account ID</th>
+                  <th className="px-4 py-3 font-semibold">Automation ID</th>
+                  <th className="px-4 py-3 font-semibold">Created</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {analyticsList.map((row) => (
+                  <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <td className="px-4 py-3 font-medium">{row.event_type}</td>
+                    <td className="px-4 py-3 font-mono text-xs truncate max-w-[140px]">{row.user_id}</td>
+                    <td className="px-4 py-3 font-mono text-xs truncate max-w-[140px]">{row.instagram_account_id}</td>
+                    <td className="px-4 py-3 font-mono text-xs truncate max-w-[140px]">{row.automation_id ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-500">{new Date(row.created_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {analyticsList.length === 0 && (
+            <div className="px-4 py-8 text-center text-gray-500">No analytics events yet.</div>
+          )}
+        </div>
+      )}
+
+      {/* Message logs table */}
+      {tab === 'message_logs' && (
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Type</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Sender</th>
+                  <th className="px-4 py-3 font-semibold">Receiver</th>
+                  <th className="px-4 py-3 font-semibold">Message</th>
+                  <th className="px-4 py-3 font-semibold">Created</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {messageLogsList.map((row) => (
+                  <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <td className="px-4 py-3">{row.message_type}</td>
+                    <td className="px-4 py-3">{row.status ?? '—'}</td>
+                    <td className="px-4 py-3 font-mono text-xs truncate max-w-[100px]">{row.sender_id}</td>
+                    <td className="px-4 py-3 font-mono text-xs truncate max-w-[100px]">{row.receiver_id}</td>
+                    <td className="px-4 py-3 max-w-[200px] truncate text-gray-600 dark:text-gray-400" title={row.message_text ?? ''}>
+                      {row.message_text ? (row.message_text.length > 60 ? row.message_text.slice(0, 60) + '…' : row.message_text) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">{new Date(row.created_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {messageLogsList.length === 0 && (
+            <div className="px-4 py-8 text-center text-gray-500">No message logs yet.</div>
           )}
         </div>
       )}
