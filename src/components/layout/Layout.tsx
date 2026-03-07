@@ -56,13 +56,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   React.useEffect(() => {
     if (!user?.id) return;
-    supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single()
-      .then(({ data }) => setIsAdmin(Boolean(data?.is_admin)))
-      .catch(() => setIsAdmin(false));
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('id', user.id)
+          .single();
+        setIsAdmin(Boolean(data?.is_admin));
+      } catch {
+        setIsAdmin(false);
+      }
+    })();
   }, [user?.id]);
 
   React.useEffect(() => {

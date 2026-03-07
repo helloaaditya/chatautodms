@@ -182,10 +182,12 @@ export const Admin: React.FC = () => {
     else loadLeads();
   };
 
-  const filter = <T extends Record<string, unknown>>(arr: T[], keys: string[]): T[] => {
+  const filter = <T,>(arr: T[], keys: string[]): T[] => {
     if (!search.trim()) return arr;
     const s = search.toLowerCase();
-    return arr.filter((row) => keys.some((k) => String(row[k] ?? '').toLowerCase().includes(s)));
+    return arr.filter((row) =>
+      keys.some((k) => String((row as Record<string, unknown>)[k] ?? '').toLowerCase().includes(s))
+    );
   };
 
   if (loading) {
