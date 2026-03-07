@@ -113,6 +113,7 @@ export const Admin: React.FC = () => {
   const [editModal, setEditModal] = useState<{ type: TabId; row: Record<string, unknown> } | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchWithAuth = useCallback(async (url: string, options: RequestInit = {}) => {
     const token = await getSessionToken();
@@ -136,61 +137,104 @@ export const Admin: React.FC = () => {
     return Boolean(data?.is_admin);
   }, []);
 
-  const loadProfiles = useCallback(async () => {
-    const res = await fetchWithAuth(API + '/profiles');
-    if (res.ok) {
-      const data = await res.json();
-      setProfiles(Array.isArray(data) ? data : []);
+  const parseJson = useCallback(async (res: Response): Promise<unknown> => {
+    const text = await res.text();
+    try {
+      return text ? JSON.parse(text) : null;
+    } catch {
+      return null;
     }
-  }, [fetchWithAuth]);
+  }, []);
+
+  const setErrorFromRes = useCallback((res: Response, data: unknown, fallback: string) => {
+    if (res.ok) return;
+    const msg = data && typeof data === 'object' && 'error' in data ? String((data as { error: string }).error) : fallback;
+    setLoadError(`${fallback}: ${res.status} ${msg}`);
+  }, []);
+
+  const loadProfiles = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth(API + '/profiles');
+      const data = await parseJson(res);
+      if (res.ok) setProfiles(Array.isArray(data) ? data : []); else setErrorFromRes(res, data, 'Profiles');
+    } catch (_) {
+      setLoadError('Failed to load profiles. Check network and try again.');
+    }
+  }, [fetchWithAuth, parseJson, setErrorFromRes]);
 
   const loadAccounts = useCallback(async () => {
-    const res = await fetchWithAuth(API + '/instagram-accounts');
-    if (res.ok) {
-      const data = await res.json();
-      setAccounts(Array.isArray(data) ? data : []);
+    try {
+      const res = await fetchWithAuth(API + '/instagram-accounts');
+      const data = await parseJson(res);
+      if (res.ok) setAccounts(Array.isArray(data) ? data : []); else setErrorFromRes(res, data, 'Accounts');
+    } catch (_) {
+      setLoadError('Failed to load accounts.');
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, parseJson, setErrorFromRes]);
 
   const loadAutomations = useCallback(async () => {
-    const res = await fetchWithAuth(API + '/automations');
-    if (res.ok) {
-      const data = await res.json();
-      setAutomations(Array.isArray(data) ? data : []);
+    try {
+      const res = await fetchWithAuth(API + '/automations');
+      const data = await parseJson(res);
+      if (res.ok) setAutomations(Array.isArray(data) ? data : []); else setErrorFromRes(res, data, 'Automations');
+    } catch (_) {
+      setLoadError('Failed to load automations.');
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, parseJson, setErrorFromRes]);
 
   const loadLeads = useCallback(async () => {
-    const res = await fetchWithAuth(API + '/leads');
-    if (res.ok) {
-      const data = await res.json();
-      setLeads(Array.isArray(data) ? data : []);
+    try {
+      const res = await fetchWithAuth(API + '/leads');
+      const data = await parseJson(res);
+      if (res.ok) setLeads(Array.isArray(data) ? data : []); else setErrorFromRes(res, data, 'Leads');
+    } catch (_) {
+      setLoadError('Failed to load leads.');
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, parseJson, setErrorFromRes]);
 
   const loadStats = useCallback(async () => {
-    const res = await fetchWithAuth(API + '/stats');
-    if (res.ok) {
-      const data = await res.json();
-      setStats(data as Stats);
+    try {
+      const res = await fetchWithAuth(API + '/stats');
+      const data = await parseJson(res);
+      if (res.ok && data && typeof data === 'object') setStats(data as Stats); else setErrorFromRes(res, data, 'Stats');
+    } catch (_) {
+      setLoadError('Failed to load stats.');
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, parseJson, setErrorFromRes]);
 
   const loadAnalytics = useCallback(async () => {
-    const res = await fetchWithAuth(API + '/analytics');
-    if (res.ok) {
-      const data = await res.json();
-      setAnalyticsList(Array.isArray(data) ? data : []);
+    try {
+      const res = await fetchWithAuth(API + '/analytics');
+      const data = await parseJson(res);
+      if (res.ok) setAnalyticsList(Array.isArray(data) ? data : []); else setErrorFromRes(res, data, 'Analytics');
+    } catch (_) {
+      setLoadError('Failed to load analytics.');
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, parseJson, setErrorFromRes]);
 
   const loadMessageLogs = useCallback(async () => {
-    const res = await fetchWithAuth(API + '/message-logs');
-    if (res.ok) {
-      const data = await res.json();
-      setMessageLogsList(Array.isArray(data) ? data : []);
+    try {
+      const res = await fetchWithAuth(API + '/message-logs');
+      const data = await parseJson(res);
+      if (res.ok) setMessageLogsList(Array.isArray(data) ? data : []); else setErrorFromRes(res, data, 'Message logs');
+    } catch (_) {
+      setLoadError('Failed to load message logs.');
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, parseJson, setErrorFromRes]);
+
+  const retryLoad = useCallback(() => {
+    setLoadError(null);
+    setLoading(true);
+    Promise.all([
+      loadProfiles(),
+      loadAccounts(),
+      loadAutomations(),
+      loadLeads(),
+      loadStats(),
+      loadAnalytics(),
+      loadMessageLogs(),
+    ]).finally(() => setLoading(false));
+  }, [loadProfiles, loadAccounts, loadAutomations, loadLeads, loadStats, loadAnalytics, loadMessageLogs]);
 
   useEffect(() => {
     (async () => {
@@ -200,6 +244,7 @@ export const Admin: React.FC = () => {
         setLoading(false);
         return;
       }
+      setLoadError(null);
       await Promise.all([
         loadProfiles(),
         loadAccounts(),
@@ -300,6 +345,19 @@ export const Admin: React.FC = () => {
           <p className="text-gray-500 dark:text-gray-400 mt-1">View and manage everything: overview, users, accounts, automations, leads, analytics, and message logs.</p>
         </div>
       </div>
+
+      {loadError && (
+        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 flex items-center justify-between gap-4">
+          <p className="text-amber-800 dark:text-amber-200 text-sm">{loadError}</p>
+          <button
+            type="button"
+            onClick={retryLoad}
+            className="shrink-0 px-4 py-2 rounded-lg bg-amber-600 text-white font-medium hover:bg-amber-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-700 pb-2">
         {tabs.map(({ id, label, icon: Icon }) => (

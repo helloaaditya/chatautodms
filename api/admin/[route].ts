@@ -1,7 +1,7 @@
 /**
  * Single admin API: handles /api/admin/me, /api/admin/profiles, /api/admin/instagram-accounts,
  * /api/admin/automations, /api/admin/leads, /api/admin/stats, /api/admin/analytics, /api/admin/message-logs.
- * One serverless function to stay under Vercel Hobby limit.
+ * One serverless function to stay under Vercel Hobby limit. File [route].ts so Vercel matches /api/admin/:route.
  */
 type Req = {
   method?: string;
