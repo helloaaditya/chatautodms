@@ -62,23 +62,27 @@ export async function ensureAdmin(req: VercelReq): Promise<
   { ok: true; userId: string; supabase: import('@supabase/supabase-js').SupabaseClient } |
   { ok: false; status: number; body: { error: string } }
 > {
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-    return { ok: false, status: 500, body: { error: 'Server config missing. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.' } };
+  try {
+    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+      return { ok: false, status: 500, body: { error: 'Server config missing. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.' } };
+    }
+    const token = getTokenFromRequest(req);
+    const userId = token ? getUserIdFromJwt(token) : null;
+    if (!userId) {
+      return { ok: false, status: 401, body: { error: 'Not signed in' } };
+    }
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', userId)
+      .single();
+    if (error || !profile?.is_admin) {
+      return { ok: false, status: 403, body: { error: 'Admin access required' } };
+    }
+    return { ok: true, userId, supabase };
+  } catch (err) {
+    return { ok: false, status: 500, body: { error: err instanceof Error ? err.message : 'Internal server error' } };
   }
-  const token = getTokenFromRequest(req);
-  const userId = token ? getUserIdFromJwt(token) : null;
-  if (!userId) {
-    return { ok: false, status: 401, body: { error: 'Not signed in' } };
-  }
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', userId)
-    .single();
-  if (error || !profile?.is_admin) {
-    return { ok: false, status: 403, body: { error: 'Admin access required' } };
-  }
-  return { ok: true, userId, supabase };
 }
