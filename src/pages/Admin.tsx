@@ -182,7 +182,7 @@ export const Admin: React.FC = () => {
     else loadLeads();
   };
 
-  const filter = (arr: { [key: string]: unknown }[], keys: string[]) => {
+  const filter = <T extends Record<string, unknown>>(arr: T[], keys: string[]): T[] => {
     if (!search.trim()) return arr;
     const s = search.toLowerCase();
     return arr.filter((row) => keys.some((k) => String(row[k] ?? '').toLowerCase().includes(s)));
@@ -213,10 +213,10 @@ export const Admin: React.FC = () => {
     { id: 'leads', label: 'Leads', icon: UserPlus },
   ];
 
-  const filteredProfiles = filter(profiles as unknown as { [key: string]: unknown }[], ['email', 'full_name', 'subscription_tier']);
-  const filteredAccounts = filter(accounts as unknown as { [key: string]: unknown }[], ['account_name', 'instagram_business_id', 'page_id']);
-  const filteredAutomations = filter(automations as unknown as { [key: string]: unknown }[], ['name', 'trigger_type']);
-  const filteredLeads = filter(leads as unknown as { [key: string]: unknown }[], ['username', 'full_name', 'email']);
+  const filteredProfiles = filter(profiles, ['email', 'full_name', 'subscription_tier']);
+  const filteredAccounts = filter(accounts, ['account_name', 'instagram_business_id', 'page_id']);
+  const filteredAutomations = filter(automations, ['name', 'trigger_type']);
+  const filteredLeads = filter(leads, ['username', 'full_name', 'email']);
 
   return (
     <div className="space-y-6">

@@ -55,12 +55,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, []);
 
   React.useEffect(() => {
-    if (!user) return;
-    fetch('/api/admin/me', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((d) => setIsAdmin(Boolean(d?.isAdmin)))
+    if (!user?.id) return;
+    supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => setIsAdmin(Boolean(data?.is_admin)))
       .catch(() => setIsAdmin(false));
-  }, [user]);
+  }, [user?.id]);
 
   React.useEffect(() => {
     if (dark) {
