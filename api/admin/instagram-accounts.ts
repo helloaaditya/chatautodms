@@ -1,4 +1,4 @@
-import { ensureAdmin } from '../_lib/adminAuth';
+import { ensureAdmin } from './lib';
 
 type Req = { method?: string; headers?: object; body?: string; query?: { id?: string } };
 type Res = { setHeader: (n: string, v: string) => void; status: (c: number) => Res; json: (b: object) => void };
