@@ -11,17 +11,11 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { supabase } from '../api/supabase';
 
 const API = '/api/admin';
 
-function getAuthHeaders(): HeadersInit {
-  const token = (window as unknown as { __SUPABASE_TOKEN__?: string }).__SUPABASE_TOKEN__;
-  if (token) return { Authorization: `Bearer ${token}` };
-  return {};
-}
-
 async function getSessionToken(): Promise<string | null> {
-  const { supabase } = await import('../api/supabase');
   const { data: { session } } = await supabase.auth.getSession();
   return session?.access_token ?? null;
 }
@@ -95,16 +89,13 @@ export const Admin: React.FC = () => {
     return res;
   }, []);
 
-  const checkAdmin = useCallback(async () => {
-    const res = await fetchWithAuth(`${API}/me`);
-    const data = await res.json().catch(() => ({}));
-    if (!data.isAdmin) {
-      setForbidden(true);
-      setLoading(false);
-      return false;
-    }
-    return true;
-  }, [fetchWithAuth]);
+  /** Check admin via Supabase (same source as sidebar) so we don't depend on API for the gate. */
+  const checkAdminViaSupabase = useCallback(async (): Promise<boolean> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.id) return false;
+    const { data } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
+    return Boolean(data?.is_admin);
+  }, []);
 
   const loadProfiles = useCallback(async () => {
     const res = await fetchWithAuth(API + '/profiles');
@@ -140,12 +131,16 @@ export const Admin: React.FC = () => {
 
   useEffect(() => {
     (async () => {
-      const ok = await checkAdmin();
-      if (!ok) return;
+      const isAdmin = await checkAdminViaSupabase();
+      if (!isAdmin) {
+        setForbidden(true);
+        setLoading(false);
+        return;
+      }
       await Promise.all([loadProfiles(), loadAccounts(), loadAutomations(), loadLeads()]);
       setLoading(false);
     })();
-  }, [checkAdmin, loadProfiles, loadAccounts, loadAutomations, loadLeads]);
+  }, [checkAdminViaSupabase, loadProfiles, loadAccounts, loadAutomations, loadLeads]);
 
   const handleUpdate = async (type: TabId, id: string, payload: Record<string, unknown>) => {
     setSaving(true);
