@@ -6,6 +6,8 @@
 type Req = {
   method?: string;
   url?: string;
+  path?: string;
+  query?: { route?: string; id?: string; limit?: string; [k: string]: string | string[] | undefined };
   headers?: { cookie?: string; authorization?: string };
   body?: string;
 };
@@ -42,13 +44,26 @@ function getUserId(token: string): string | null {
 }
 
 function getPathAndQuery(req: Req): { route: string; query: Record<string, string> } {
-  const url = new URL(req.url || '/', 'http://localhost');
-  const pathname = url.pathname || '';
-  const route = pathname.replace(/^\/api\/admin\/?/, '').split('/')[0] || '';
+  // Vercel may pass dynamic segment as req.query.route
+  const fromQuery = req.query?.route;
+  const routeFromQuery = typeof fromQuery === 'string' ? fromQuery : Array.isArray(fromQuery) ? fromQuery[0] : '';
+  const pathOrUrl = req.path || req.url || '/';
+  const pathname = pathOrUrl.startsWith('http') ? new URL(pathOrUrl).pathname : pathOrUrl.split('?')[0] || '';
+  const routeFromPath = pathname.replace(/^\/api\/admin\/?/, '').split('/')[0] || '';
+  const route = routeFromQuery || routeFromPath;
   const query: Record<string, string> = {};
-  url.searchParams.forEach((v, k) => {
-    query[k] = v;
-  });
+  if (req.query) {
+    for (const [k, v] of Object.entries(req.query)) {
+      if (k === 'route') continue;
+      query[k] = Array.isArray(v) ? v[0] ?? '' : String(v ?? '');
+    }
+  }
+  if (req.url && req.url.includes('?')) {
+    const url = new URL(req.url.startsWith('http') ? req.url : `http://localhost${req.url}`);
+    url.searchParams.forEach((v, k) => {
+      if (!(k in query)) query[k] = v;
+    });
+  }
   return { route, query };
 }
 
