@@ -15,6 +15,7 @@ import { Analytics } from './pages/Analytics';
 import { Leads } from './pages/Leads';
 import { Settings } from './pages/Settings';
 import { Billing } from './pages/Billing';
+import { Admin } from './pages/Admin';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -76,6 +77,7 @@ const App: React.FC = () => {
       <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
       <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+      <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

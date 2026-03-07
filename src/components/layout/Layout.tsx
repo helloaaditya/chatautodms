@@ -14,7 +14,8 @@ import {
   ChevronRight,
   Sun,
   Moon,
-  HelpCircle
+  HelpCircle,
+  Shield
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -37,6 +38,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [user, setUser] = React.useState<any>(null);
+  const [isAdmin, setIsAdmin] = React.useState(false);
   const [dark, setDark] = React.useState(() => {
     if (typeof window === 'undefined') return false;
     const stored = localStorage.getItem(THEME_KEY);
@@ -51,6 +53,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       setUser(user);
     });
   }, []);
+
+  React.useEffect(() => {
+    if (!user) return;
+    fetch('/api/admin/me', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => setIsAdmin(Boolean(d?.isAdmin)))
+      .catch(() => setIsAdmin(false));
+  }, [user]);
 
   React.useEffect(() => {
     if (dark) {
@@ -110,6 +120,20 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <span>{link.name}</span>
             </NavLink>
           ))}
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) => `
+                flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200
+                ${isActive 
+                  ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-medium' 
+                  : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400'}
+              `}
+            >
+              <Shield size={20} />
+              <span>Admin</span>
+            </NavLink>
+          )}
         </nav>
 
         {/* User Profile */}
